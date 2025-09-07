@@ -1,0 +1,137 @@
+// src/data/questions.js
+export const questions = [
+  {
+    id: "q1-photo",
+    order: 1,
+    category: "Κυπριακό Πρωτάθλημα",
+    points: 1,
+    lang: "el",
+    prompt: "Ποια είναι η θύρα της Πάφου;",
+    type: "open",
+    media: { kind: "image", src: "/Images/Photo1.png", alt: "Photo quiz 1" },
+    // NEW ↓
+    answerMode: "numeric",
+    acceptNumber: 5,       // this is what gets auto-validated
+    // keep the nice display string as-is for the Answer screen
+    answer: "Θύρα 5",
+  },
+  {
+    id: "q2-audio-interview",
+    order: 2,
+    category: "Βιογραφικό παίκτη",
+    points: 1,
+    lang: "el",
+    prompt: "Ποιος είναι ο παίκτης με την παρακάτω καριέρα;",
+    type: "open",
+    media: { kind: "image", src: "/Images/Photo2.png" },
+
+    answerMode: "catalog",
+    catalog: "players",
+    accept: ["Michael Carrick"],
+    answer: "Michael Carrick"
+  },
+  {
+    id: "q3-apoel-gk",
+    order: 3,
+    category: "Ιστορία",
+    points: 1,
+    lang: "el",
+    prompt: "Ποιος είναι ο προπονητής με τις περισσότερες κατακτήσεις Europa League;",
+    type: "open",
+
+    answerMode: "catalog",
+    catalog: "coaches",
+    accept: ["Unai Emery"],
+    answer: "Unai Emery (4)"
+  },
+  {
+    id: "q4-cl-audio-score",
+    order: 4,
+    category: "Γεωγραφία",
+    points: 2,
+    lang: "el",
+    prompt: "Σε ποια χώρα αγωνίζεται η Beveren;",
+    type: "open",
+
+    answerMode: "catalog",
+    catalog: "countries",
+    accept: ["Belgium"],
+    answer: "Βέλγιο"
+  },
+  {
+    id: "q5-guess-player",
+    order: 5,
+    category: "Iconic Matches (Ηχητικό)",
+    points: 2,
+    lang: "el",
+    prompt: "Ποιο ήταν το τελικό σκορ του αγώνα που θα ακούσεις;",
+    type: "open",
+    media: { kind: "video", src: "/Audio/Recording1.mp4" },
+
+    answerMode: "scoreline",
+    teams: { home: "Arsenal", away: "Olympiakos" },
+    acceptScores: [{ home: 2, away: 3 }],
+    answer: "Arsenal – Olympiakos 2–3"
+  },
+  {
+    id: "q6-cl-winner-2013",
+    order: 6,
+    category: "Στατιστικά παίκτη",
+    points: 2,
+    lang: "el",
+    prompt: "Ποιος είναι ο παίκτης με τα παρακάτω στατιστικά;",
+    type: "open",
+    media: { kind: "image", src: "/Images/Photo3.png" },
+
+    answerMode: "catalog",
+    catalog: "players",
+    accept: ["Marquinhos"],
+    answer: "Marquinhos"
+  },
+  {
+    id: "q7-scorer-video",
+    order: 7,
+    category: "Logo Quiz",
+    points: 1,
+    lang: "el",
+    prompt: "Ποιας ομάδας είναι το παρακάτω λογότυπο;",
+    type: "open",
+    media: { kind: "image", src: "/Images/Photo4.png" },
+
+    answerMode: "catalog",
+    catalog: "teams",
+    accept: ["Birmingham City"],
+    answer: "Birmingham City F.C."
+  },
+  {
+    id: "q8-gossip-hair",
+    order: 8,
+    category: "Iconic Goals",
+    points: 1,
+    lang: "el",
+    prompt: "Κόντρα σε ποια ομάδα πέτυχε αυτό το υπέροχο γκολ ο Ολιβιέ Ζιρού;",
+    type: "open",
+    media: { kind: "video", src: "/Videos/Video1.mp4", type: "video/mp4" },
+
+    answerMode: "catalog",
+    catalog: "teams",
+    accept: ["Crystal Palace"],
+    answer: "Crystal Palace"
+  },
+  {
+    id: "q9-world-cup-minutes",
+    order: 9,
+    category: "Τελική ερώτηση - Premier League",
+    points: 1,
+    isFinal: true,
+    lang: "el",
+    prompt:
+      "Ποια ομάδα έχει τις περισσότερες ισοπαλίες στην Premier League τα τελευταία 5 χρόνια (02/09/2020 – 02/09/2025);",
+    type: "open",
+
+    answerMode: "catalog",
+    catalog: "teams",
+    accept: ["Brighton & Hove Albion"],
+    answer: "Brighton & Hove Albion (63)"
+  }
+];
