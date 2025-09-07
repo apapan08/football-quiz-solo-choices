@@ -8,6 +8,9 @@ import AutoCompleteAnswer from "./components/AutoCompleteAnswer";
 import ScoreInput from "./components/ScoreInput";
 import { validate as baseValidate } from "./lib/validators";
 
+// ✅ NEW: import Media as a separate, memoized component
+import Media from "./components/Media";
+
 /**
  * Football Quiz — SOLO MODE (single player)
  * Auto-marking:
@@ -633,12 +636,14 @@ export default function QuizPrototype() {
 function QuestionStage() {
   const mode = q.answerMode || "text";
 
-  // NEW: local state for catalog mode (picked item + raw text)
+  // Local state for CATALOG
   const [catPicked, setCatPicked] = useState(null);
   const [catText, setCatText] = useState("");
 
-  // existing state for other inputs
+  // Local state for TEXT/NUMERIC
   const [inputValue, setInputValue] = useState(() => playerAnswers[index] ?? "");
+
+  // Local state for SCORELINE (keep edits local; persist on submit only)
   const [scoreValue, setScoreValue] = useState(() =>
     typeof playerAnswers[index] === "object" && playerAnswers[index] !== null
       ? playerAnswers[index]
@@ -652,27 +657,31 @@ function QuestionStage() {
         ? playerAnswers[index]
         : { home: 0, away: 0 }
     );
-    // reset catalog helpers on question change
     setCatPicked(null);
     setCatText("");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [index]);
 
   const submitAndReveal = async (value) => {
-    // Persist user's entry
-    const stored =
-      mode === "scoreline"
-        ? value // {home,away}
-        : mode === "numeric"
-        ? { value: normalizeNumber(value) }
-        : value; // string or catalog item (object) or text
+    // Build the stored value once, and only persist here
+    let stored;
+    if (mode === "scoreline") {
+      stored = value; // {home, away}
+    } else if (mode === "numeric") {
+      // If user clicked "Δεν γνωρίζω" pass null to avoid accidental 0 being correct
+      if (value === "" || value === null || value === undefined) {
+        stored = { value: null };
+      } else {
+        const n = Number(value);
+        stored = { value: Number.isFinite(n) ? n : null };
+      }
+    } else {
+      stored = value; // text or catalog
+    }
 
     setPlayerAnswers((prev) => ({
       ...prev,
-      [index]:
-        typeof stored === "object" && stored?.name
-          ? stored.name
-          : stored,
+      [index]: typeof stored === "object" && stored?.name ? stored.name : stored,
     }));
 
     setStage(STAGES.ANSWER);
@@ -715,13 +724,13 @@ function QuestionStage() {
         <Media media={q.media} />
       </div>
 
-      {/* CATALOG — now requires explicit Υποβολή */}
+      {/* CATALOG */}
       {mode === "catalog" && (
         <div className="mt-5">
           <AutoCompleteAnswer
             catalog={q.catalog}
             placeholder="Άρχισε να πληκτρολογείς…"
-            onSelect={(item) => setCatPicked(item)}      // don't auto-advance
+            onSelect={(item) => setCatPicked(item)}
             onChangeText={(t) => setCatText(t)}
           />
           <div className="flex flex-wrap gap-3 justify-center mt-3">
@@ -729,10 +738,13 @@ function QuestionStage() {
               type="button"
               className="btn btn-accent"
               onClick={() => {
-                const toSubmit = (catPicked && catPicked.name) ? catPicked : catText;
+                const toSubmit =
+                  (catPicked && catPicked.name) ? catPicked : catText;
                 submitAndReveal(toSubmit);
               }}
-              disabled={!((catPicked && catPicked.name) || (catText && catText.trim().length > 0))}
+              disabled={
+                !((catPicked && catPicked.name) || (catText && catText.trim().length > 0))
+              }
             >
               Υποβολή
             </button>
@@ -753,8 +765,8 @@ function QuestionStage() {
           <ScoreInput
             value={scoreValue}
             onChange={(v) => {
+              // keep edits local to avoid parent re-render (prevents video restart)
               setScoreValue(v);
-              setPlayerAnswers((prev) => ({ ...prev, [index]: v }));
             }}
           />
           <div className="flex flex-wrap gap-3 justify-center">
@@ -808,7 +820,7 @@ function QuestionStage() {
         </form>
       )}
 
-      {/* PLAIN TEXT (manual marking later) */}
+      {/* TEXT */}
       {mode === "text" && (
         <form
           className="mt-5 flex flex-col items-stretch gap-3"
@@ -826,7 +838,6 @@ function QuestionStage() {
             autoCapitalize="sentences"
             spellCheck={false}
           />
-
           <div className="flex flex-wrap gap-3 justify-center">
             <button type="submit" className="btn btn-accent">
               Υποβολή
@@ -847,142 +858,140 @@ function QuestionStage() {
 }
 
 
+  function AnswerStage() {
+    const mode = q.answerMode || "text";
+    const rawUser = (playerAnswers && playerAnswers[index]) ?? "";
 
-function AnswerStage() {
-  const mode = q.answerMode || "text";
-  const rawUser = (playerAnswers && playerAnswers[index]) ?? "";
+    // Pretty-print the user's answer
+    let userAnswerStr = "—";
+    if (mode === "scoreline" && rawUser && typeof rawUser === "object") {
+      userAnswerStr = `${rawUser.home ?? 0} - ${rawUser.away ?? 0}`;
+    } else if (mode === "numeric" && rawUser && typeof rawUser === "object") {
+      userAnswerStr = rawUser.value != null ? String(rawUser.value) : "—";
+    } else {
+      userAnswerStr = rawUser ? String(rawUser) : "—";
+    }
 
-  // Pretty-print the user's answer
-  let userAnswerStr = "—";
-  if (mode === "scoreline" && rawUser && typeof rawUser === "object") {
-    userAnswerStr = `${rawUser.home ?? 0} - ${rawUser.away ?? 0}`;
-  } else if (mode === "numeric" && rawUser && typeof rawUser === "object") {
-    userAnswerStr = rawUser.value != null ? String(rawUser.value) : "—";
-  } else {
-    userAnswerStr = rawUser ? String(rawUser) : "—";
-  }
+    // NEW: correctness & delta for this question
+    const outcomeKey = answered[index];
+    const currentRow = RESULT_ROWS[index] || null;
+    const isCorrect = outcomeKey === "correct" || outcomeKey === "final-correct";
+    const isWrong   = outcomeKey === "wrong"   || outcomeKey === "final-wrong";
+    const deltaPts  = currentRow ? currentRow.delta : 0;
 
-  // NEW: correctness & delta for this question
-  const outcomeKey = answered[index];
-  const currentRow = RESULT_ROWS[index] || null;
-  const isCorrect = outcomeKey === "correct" || outcomeKey === "final-correct";
-  const isWrong   = outcomeKey === "wrong"   || outcomeKey === "final-wrong";
-  const deltaPts  = currentRow ? currentRow.delta : 0;
-
-  return (
-    <StageCard>
-      <div className="text-center">
-        <div className="font-display text-3xl font-extrabold">
-          {q.answer}
-        </div>
-
-        {/* Player answer — colored and with badge */}
-        <div className="mt-3 font-ui text-sm">
-          <div
-            className="inline-flex items-center gap-2 rounded-lg px-3 py-2"
-            style={{
-              background: isCorrect
-                ? "rgba(16,185,129,0.15)" // green tint
-                : isWrong
-                ? "rgba(244,63,94,0.15)"  // red tint
-                : "rgba(148,163,184,0.10)",
-              border: "1px solid rgba(255,255,255,0.12)",
-            }}
-          >
-            <span style={{ opacity: 0.85 }}>Απάντηση Παίκτη:</span>
-            <span className="italic text-slate-100">{userAnswerStr}</span>
-
-            {(isCorrect || isWrong) && (
-              <span
-                className="ml-2 rounded-full px-2.5 py-0.5 text-xs font-bold text-white"
-                style={{ background: isCorrect ? THEME.positiveGrad : THEME.negativeGrad }}
-                title={isCorrect ? "Σωστό" : "Λάθος"}
-              >
-                {isCorrect ? "✔" : "✘"} {deltaPts >= 0 ? `+${deltaPts}` : `${deltaPts}`}
-              </span>
-            )}
+    return (
+      <StageCard>
+        <div className="text-center">
+          <div className="font-display text-3xl font-extrabold">
+            {q.answer}
           </div>
-        </div>
 
-        {q.fact && (
-          <div className="mt-2 font-ui text-sm text-slate-300">
-            ℹ️ {q.fact}
-          </div>
-        )}
-      </div>
-
-      {/* X2 status reminder */}
-      <div className="mt-3 text-center text-xs text-slate-400 font-ui">
-        {isX2ActiveFor("p1") && !isFinalIndex && <span>({p1.name}: ×2 ενεργό)</span>}
-      </div>
-
-      {/* Manual awarding controls (only for text mode) */}
-      {!isFinalIndex && (mode === "text") && (
-        <div className="mt-6 flex flex-col items-center gap-3 font-ui">
-          <div className="flex flex-wrap justify-center gap-2">
-            <button
-              className="btn text-white"
-              style={{ background: THEME.positiveGrad }}
-              onClick={() => { awardToP1(1); setAnswered((a) => ({ ...a, [index]: "correct" })); next(); }}
-              title="Σωστό"
+          {/* Player answer — colored and with badge */}
+          <div className="mt-3 font-ui text-sm">
+            <div
+              className="inline-flex items-center gap-2 rounded-lg px-3 py-2"
+              style={{
+                background: isCorrect
+                  ? "rgba(16,185,129,0.15)" // green tint
+                  : isWrong
+                  ? "rgba(244,63,94,0.15)"  // red tint
+                  : "rgba(148,163,184,0.10)",
+                border: "1px solid rgba(255,255,255,0.12)",
+              }}
             >
-              Σωστό
-            </button>
-            <button
-              className="btn text-white"
-              style={{ background: THEME.negativeGrad }}
-              onClick={() => { noAnswer(); setAnswered((a) => ({ ...a, [index]: "wrong" })); next(); }}
-              title="Λάθος / Καμία απάντηση — μηδενίζει το σερί"
-            >
-              Λάθος / Καμία απάντηση
-            </button>
-          </div>
-        </div>
-      )}
+              <span style={{ opacity: 0.85 }}>Απάντηση Παίκτη:</span>
+              <span className="italic text-slate-100">{userAnswerStr}</span>
 
-      {/* Final scoring controls on last question (text mode only) */}
-      {isFinalIndex && mode === "text" && (
-        <div className="card font-ui mt-6 text-center">
-          <div className="mb-2 text-sm text-slate-300">
-            Τελικός — Απονέμονται πόντοι βάσει πονταρίσματος
-          </div>
-          <div className="text-xs text-slate-400 mb-3">
-            Το Χ2 δεν ισχύει στον Τελικό.
-          </div>
-          <div className="space-y-2">
-            <div className="text-sm text-slate-300">{p1.name}</div>
-            <div className="flex flex-wrap justify-center gap-2">
-              <button
-                disabled={finalResolved.p1}
-                onClick={() => { finalizeOutcomeP1("correct"); next(); }}
-                className="btn text-white disabled:opacity-50"
-                style={{ background: THEME.positiveGrad }}
-              >
-                Σωστό +{wager.p1}
-              </button>
-              <button
-                disabled={finalResolved.p1}
-                onClick={() => { finalizeOutcomeP1("wrong"); next(); }}
-                className="btn text-white disabled:opacity-50"
-                style={{ background: THEME.negativeGrad }}
-              >
-                Λάθος −{wager.p1}
-              </button>
-              {finalResolved.p1 && (
-                <span className="text-xs text-emerald-300">Ολοκληρώθηκε ✔</span>
+              {(isCorrect || isWrong) && (
+                <span
+                  className="ml-2 rounded-full px-2.5 py-0.5 text-xs font-bold text-white"
+                  style={{ background: isCorrect ? THEME.positiveGrad : THEME.negativeGrad }}
+                  title={isCorrect ? "Σωστό" : "Λάθος"}
+                >
+                  {isCorrect ? "✔" : "✘"} {deltaPts >= 0 ? `+${deltaPts}` : `${deltaPts}`}
+                </span>
               )}
             </div>
           </div>
+
+          {q.fact && (
+            <div className="mt-2 font-ui text-sm text-slate-300">
+              ℹ️ {q.fact}
+            </div>
+          )}
         </div>
-      )}
 
-      <div className="mt-6 flex justify-center">
-        <NavButtons />
-      </div>
-    </StageCard>
-  );
-}
+        {/* X2 status reminder */}
+        <div className="mt-3 text-center text-xs text-slate-400 font-ui">
+          {isX2ActiveFor("p1") && !isFinalIndex && <span>({p1.name}: ×2 ενεργό)</span>}
+        </div>
 
+        {/* Manual awarding controls (only for text mode) */}
+        {!isFinalIndex && (mode === "text") && (
+          <div className="mt-6 flex flex-col items-center gap-3 font-ui">
+            <div className="flex flex-wrap justify-center gap-2">
+              <button
+                className="btn text-white"
+                style={{ background: THEME.positiveGrad }}
+                onClick={() => { awardToP1(1); setAnswered((a) => ({ ...a, [index]: "correct" })); next(); }}
+                title="Σωστό"
+              >
+                Σωστό
+              </button>
+              <button
+                className="btn text-white"
+                style={{ background: THEME.negativeGrad }}
+                onClick={() => { noAnswer(); setAnswered((a) => ({ ...a, [index]: "wrong" })); next(); }}
+                title="Λάθος / Καμία απάντηση — μηδενίζει το σερί"
+              >
+                Λάθος / Καμία απάντηση
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Final scoring controls on last question (text mode only) */}
+        {isFinalIndex && mode === "text" && (
+          <div className="card font-ui mt-6 text-center">
+            <div className="mb-2 text-sm text-slate-300">
+              Τελικός — Απονέμονται πόντοι βάσει πονταρίσματος
+            </div>
+            <div className="text-xs text-slate-400 mb-3">
+              Το Χ2 δεν ισχύει στον Τελικό.
+            </div>
+            <div className="space-y-2">
+              <div className="text-sm text-slate-300">{p1.name}</div>
+              <div className="flex flex-wrap justify-center gap-2">
+                <button
+                  disabled={finalResolved.p1}
+                  onClick={() => { finalizeOutcomeP1("correct"); next(); }}
+                  className="btn text-white disabled:opacity-50"
+                  style={{ background: THEME.positiveGrad }}
+                >
+                  Σωστό +{wager.p1}
+                </button>
+                <button
+                  disabled={finalResolved.p1}
+                  onClick={() => { finalizeOutcomeP1("wrong"); next(); }}
+                  className="btn text-white disabled:opacity-50"
+                  style={{ background: THEME.negativeGrad }}
+                >
+                  Λάθος −{wager.p1}
+                </button>
+                {finalResolved.p1 && (
+                  <span className="text-xs text-emerald-300">Ολοκληρώθηκε ✔</span>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="mt-6 flex justify-center">
+          <NavButtons />
+        </div>
+      </StageCard>
+    );
+  }
 
   function ResultsStage() {
     // map internal RESULT_ROWS -> ResultsTableResponsive rows
@@ -1082,79 +1091,48 @@ function AnswerStage() {
     );
   }
 
-  // ——— Classic nav with Next disabled on Answer until marked ———
-  function NavButtons() {
-    const nextDisabled =
-      stage === STAGES.ANSWER
-        ? (!isFinalIndex ? !answered[index] : !finalResolved.p1)
-        : false;
+function NavButtons() {
+  const nextDisabled =
+    stage === STAGES.ANSWER
+      ? (!isFinalIndex ? !answered[index] : !finalResolved.p1)
+      : false;
 
+  const isFinalAnswerStage = stage === STAGES.ANSWER && isFinalIndex;
+
+  // On the last question's Answer stage: show one CTA to go to results
+  if (isFinalAnswerStage) {
     return (
-      <div className="flex items-center justify-center gap-3">
-        <button onClick={previous} className="btn btn-neutral">
-          ← Προηγούμενο
-        </button>
+      <div className="flex items-center justify-center">
         <button
-          onClick={next}
+          onClick={() => setStage(STAGES.RESULTS)}
           className="btn btn-accent disabled:opacity-50"
           disabled={nextDisabled}
-          title={nextDisabled ? "Καταχώρισε πρώτα την απάντηση" : "Επόμενο"}
+          title={nextDisabled ? "Καταχώρισε πρώτα την απάντηση" : "Προβολή αποτελεσμάτων"}
         >
-          Επόμενο →
+          Δες πώς τα πήγες →
         </button>
       </div>
     );
   }
 
-  function Media({ media }) {
-    if (!media || !media.kind) return null;
+  // Default (all other stages)
+  return (
+    <div className="flex items-center justify-center gap-3">
+      <button onClick={previous} className="btn btn-neutral">
+        ← Προηγούμενο
+      </button>
+      <button
+        onClick={next}
+        className="btn btn-accent disabled:opacity-50"
+        disabled={nextDisabled}
+        title={nextDisabled ? "Καταχώρισε πρώτα την απάντηση" : "Επόμενο"}
+      >
+        Επόμενο →
+      </button>
+    </div>
+  );
+}
 
-    if (media.kind === "image") {
-      return (
-        <img
-          src={media.src}
-          alt={media.alt || ""}
-          loading="lazy"
-          className="max-h-96 w-auto mx-auto rounded-xl"
-        />
-      );
-    }
-
-    if (media.kind === "audio") {
-      return (
-        <audio
-          /* no key prop to avoid remount while state changes */
-          controls
-          preload="metadata"
-          playsInline
-          className="w-full mt-2"
-          src={media.src}
-          style={{ minHeight: 44 }}
-        >
-          <source src={media.src} type="audio/mpeg" />
-          Το πρόγραμμα περιήγησής σου δεν μπορεί να αναπαράγει αυτό το ηχητικό.
-        </audio>
-      );
-    }
-
-    if (media.kind === "video") {
-      return (
-        <video
-          /* no key prop to avoid remount while state changes */
-          controls
-          preload="metadata"
-          playsInline
-          poster={media.poster}
-          className="w-full max-h-[70vh] rounded-xl"
-        >
-          <source src={media.src} type={media.type || "video/mp4"} />
-          Το πρόγραμμα περιήγησής σου δεν μπορεί να αναπαράγει αυτό το βίντεο.
-        </video>
-      );
-    }
-
-    return null;
-  }
 
   // ——— Lightweight self-tests ———
   useEffect(() => {
