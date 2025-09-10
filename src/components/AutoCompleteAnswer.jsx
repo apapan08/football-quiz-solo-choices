@@ -52,7 +52,6 @@ export default function AutoCompleteAnswer({
 
       // If nothing matched and query is long enough, try a conservative fuzzy fallback
       if (scored.length === 0 && tnorm.length >= 3 && fuse) {
-        // includeScore might be off; treat missing score as 1 (strict)
         const fuzz = fuse.search(term, { limit: 20 })
           .map(r => ({ it: r.item, fscore: typeof r.score === "number" ? r.score : 1 }))
           .filter(r => r.fscore <= 0.2); // conservative threshold
@@ -76,7 +75,10 @@ export default function AutoCompleteAnswer({
   }, [q, catalog]);
 
   const choose = (item) => {
-    setQ(item.name);
+    // If user typed Greek, prefer showing a Greek alias in the input after choose
+    const isGreek = /\p{Script=Greek}/u.test(q);
+    const greek = (item.aliases || []).find(a => /\p{Script=Greek}/u.test(a));
+    setQ(isGreek && greek ? greek : item.name);
     setOpen(false);
     onSelect?.(item);
   };
@@ -97,25 +99,31 @@ export default function AutoCompleteAnswer({
     }
   }
 
-  // Simple case-insensitive highlighter for substring matches (best-effort)
+  // Highlighter for the *label* we render (Greek alias if user types Greek)
   const highlighted = useMemo(() => {
     const ql = q.trim().toLowerCase();
     if (!ql) return {};
-    const make = (name) => {
-      const nl = (name || "").toLowerCase();
+    const isGreek = /\p{Script=Greek}/u.test(q);
+    const make = (label) => {
+      const nl = (label || "").toLowerCase();
       const pos = nl.indexOf(ql);
-      if (pos === -1) return <span className="text-sm font-semibold">{name}</span>;
+      if (pos === -1) return <span className="text-sm font-semibold">{label}</span>;
       return (
         <span className="text-sm font-semibold">
-          {name.slice(0, pos)}
+          {label.slice(0, pos)}
           <mark className="rounded px-0.5" style={{ background: "rgba(241,20,103,.25)" }}>
-            {name.slice(pos, pos + ql.length)}
+            {label.slice(pos, pos + ql.length)}
           </mark>
-          {name.slice(pos + ql.length)}
+          {label.slice(pos + ql.length)}
         </span>
       );
     };
-    return Object.fromEntries(results.map(r => [r.id, make(r.name)]));
+    const pickLabel = (r) => {
+      if (!isGreek) return r.name;
+      const greek = (r.aliases || []).find(a => /\p{Script=Greek}/u.test(a));
+      return greek || r.name;
+    };
+    return Object.fromEntries(results.map(r => [r.id, make(pickLabel(r))]));
   }, [results, q]);
 
   const expanded = open && results.length > 0;

@@ -1,4 +1,3 @@
-// src/lib/validators.js
 import { getCatalog, norm } from "./catalogs";
 
 /**
@@ -48,6 +47,9 @@ export function parseNumber(v) {
  * Supports: "catalog", "scoreline", "numeric", and fallback "text".
  *
  * Returns: { correct: boolean, canonical: string|null }
+ *
+ * NOTE: For "catalog", this expects getCatalog() to return items that may have:
+ *  - key (e.g., ISO-2), name, aliases[], and internal _norm/_aliasesNorm
  */
 export async function validate(q, chosenOrText) {
   const mode = q.answerMode || "text";
@@ -57,15 +59,25 @@ export async function validate(q, chosenOrText) {
   // ------------------------
   if (mode === "catalog") {
     const { byName } = await getCatalog(q.catalog);
-    const candidate =
-      typeof chosenOrText === "string"
-        ? byName.get(norm(chosenOrText))
-        : chosenOrText; // already a catalog item {id,name,_norm}
+
+    // Resolve candidate: if user selected from dropdown, it's an object; else try lookup by normalized text
+    const candidate = (typeof chosenOrText === "string")
+      ? byName.get(norm(chosenOrText))
+      : chosenOrText; // already a catalog item {id,name,key?,aliases?,_norm,_aliasesNorm?}
 
     if (!candidate) return { correct: false, canonical: null };
 
-    const accepted = (q.accept || []).map(norm); // accepted canonical names
-    const correct = accepted.includes(candidate._norm);
+    // Preferred: stable keys (e.g. ISO-2)
+    const acceptKeys = Array.isArray(q.acceptKeys) ? new Set(q.acceptKeys.map(String)) : null;
+    if (acceptKeys && candidate.key && acceptKeys.has(String(candidate.key))) {
+      return { correct: true, canonical: candidate.name };
+    }
+
+    // Fallback: match any normalized label (name or aliases) to accepted strings
+    const accepted = new Set((q.accept || []).map(norm));
+    const candidateNorms = new Set([candidate._norm, ...((candidate._aliasesNorm || []))]);
+    const correct = [...candidateNorms].some(n => accepted.has(n));
+
     return { correct, canonical: candidate.name };
   }
 

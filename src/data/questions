@@ -55,7 +55,12 @@ export const questions = [
 
     answerMode: "catalog",
     catalog: "countries",
-    accept: ["Belgium"],
+    // Use either acceptKeys if your countries.json has key:"BE",
+    // and/or accept[] for readable names (both EN + GR are fine).
+    acceptKeys: ["BE"],
+    accept: ["Belgium", "Βέλγιο"],
+
+    // Shown on the Answer screen (Greek nice display).
     answer: "Βέλγιο"
   },
   {
