@@ -48,6 +48,7 @@ const THEME = {
 // ——— Game constants ———
 const STORAGE_KEY = "quiz_prototype_state_v2_solo";
 const STAGES = {
+  NAME: "name",          // ⬅️ NEW: first stage
   INTRO: "intro",
   CATEGORY: "category",
   QUESTION: "question",
@@ -139,13 +140,21 @@ export default function QuizPrototype() {
       .scroll-area::-webkit-scrollbar-thumb { background:rgba(255,255,255,0.18); border-radius:999px; }
       .howto-shadow { position: sticky; bottom: 0; height: 24px; background: linear-gradient(to top, var(--howto-bg), transparent); pointer-events: none; }
 
-      /* HowTo-like surfaces for Intro */
+      /* HowTo-like surfaces for Intro/Name */
       .surface-howto { background: var(--howto-bg); border:1px solid rgba(255,255,255,0.10); border-radius:1.5rem; padding:1.5rem; box-shadow: 0 10px 24px rgba(0,0,0,.35); }
       .subcard-howto { background: rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.10); border-radius:1rem; padding:1rem; }
 
       /* Results horizontal scroll (iOS momentum + nicer thumb) */
       .results-scroll::-webkit-scrollbar { height: 10px; }
       .results-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.18); border-radius: 999px; }
+
+      /* HUD micro-interactions */
+      @keyframes hudPop { 0%{transform:scale(.92);opacity:.8} 60%{transform:scale(1.06)} 100%{transform:scale(1);opacity:1} }
+      @keyframes hudPulse { 0%{transform:scale(.98)} 50%{transform:scale(1.04)} 100%{transform:scale(1)} }
+      @keyframes hudShake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-2px)} 75%{transform:translateX(2px)} }
+      .hud-score-pop { animation: hudPop 300ms ease-out; will-change: transform,opacity; }
+      .hud-streak-pulse { animation: hudPulse 320ms ease-out; will-change: transform; }
+      .hud-streak-shake { animation: hudShake 360ms ease-in-out; will-change: transform; }
     `;
     document.head.appendChild(styleEl);
     return () => {
@@ -181,7 +190,7 @@ export default function QuizPrototype() {
   const [index, setIndex] = usePersistentState(`${STORAGE_KEY}:index`, 0);
   const [stage, setStage] = usePersistentState(
     `${STORAGE_KEY}:stage`,
-    STAGES.INTRO
+    STAGES.NAME   // start at Name stage
   );
 
   const lastIndex = QUESTIONS.length - 1;
@@ -246,8 +255,24 @@ export default function QuizPrototype() {
     {} // { [index]: string | {home,away} | {value:number} }
   );
 
-  // How-to modal
-  const [showHowTo, setShowHowTo] = useState(true);
+  // How-to modal (default closed to avoid covering Name stage)
+  const [showHowTo, setShowHowTo] = useState(false);
+
+  // NEW: ephemeral HUD flags
+  const [justScored, setJustScored] = usePersistentState(`${STORAGE_KEY}:hud:justScored`, false);
+  const [justLostStreak, setJustLostStreak] = usePersistentState(`${STORAGE_KEY}:hud:justLost`, false);
+  useEffect(() => {
+    if (justScored) {
+      const t = setTimeout(() => setJustScored(false), 320);
+      return () => clearTimeout(t);
+    }
+  }, [justScored, setJustScored]);
+  useEffect(() => {
+    if (justLostStreak) {
+      const t = setTimeout(() => setJustLostStreak(false), 380);
+      return () => clearTimeout(t);
+    }
+  }, [justLostStreak, setJustLostStreak]);
 
   // ——— Results reconstruction ———
   const RESULT_ROWS = useMemo(() => {
@@ -356,11 +381,16 @@ export default function QuizPrototype() {
       };
     });
     setLastCorrect("p1");
+    setJustScored(true);
+    setJustLostStreak(false);
   }
 
   function noAnswer() {
     setLastCorrect(null);
-    setP1((s) => ({ ...s, streak: 0 }));
+    setP1((s) => {
+      if (s.streak > 0) setJustLostStreak(true);
+      return { ...s, streak: 0 };
+    });
   }
 
   function finalizeOutcomeP1(outcome) {
@@ -376,7 +406,10 @@ export default function QuizPrototype() {
   }
 
   function next() {
-    if (stage === STAGES.INTRO) {
+    if (stage === STAGES.NAME) {
+      setIndex(0);
+      setStage(STAGES.INTRO);
+    } else if (stage === STAGES.INTRO) {
       setIndex(0);
       setStage(STAGES.CATEGORY);
     } else if (stage === STAGES.CATEGORY) setStage(STAGES.QUESTION);
@@ -390,6 +423,7 @@ export default function QuizPrototype() {
     }
   }
   function previous() {
+    // Kept for completeness; not used by current UI (single next button)
     if (stage === STAGES.QUESTION) setStage(STAGES.CATEGORY);
     else if (stage === STAGES.ANSWER) setStage(STAGES.QUESTION);
     else if (stage === STAGES.FINALE) setStage(STAGES.CATEGORY);
@@ -406,7 +440,7 @@ export default function QuizPrototype() {
 
   function resetGame() {
     setIndex(0);
-    setStage(STAGES.INTRO); // show Intro after reset
+    setStage(STAGES.NAME); // go to Name after reset
     setP1({ name: p1.name, score: 0, streak: 0, maxStreak: 0 });
     setWager({ p1: 0 });
     setFinalResolved({ p1: false });
@@ -449,41 +483,64 @@ export default function QuizPrototype() {
   }
 
   // ——— UI subcomponents ———
-  function Header() {
-    const showCounter = stage !== STAGES.INTRO && stage !== STAGES.RESULTS;
+  function HUDHeader({ current, total, score, streak, justScored, justLostStreak }) {
+    const pct = total > 0 ? ((current + 1) / total) * 100 : 0;
+
     return (
-      <div className="px-4 pt-6 pb-2 font-ui">
-        <div className="flex items-center justify-center gap-3">
-          <img
-            src="/logo.png"
-            alt="Λογότυπο"
-            className="h-7 w-auto"
-            loading="eager"
-            decoding="sync"
-            fetchpriority="high"
-            style={{
-              filter: "drop-shadow(0 1px 1.5px rgba(0,0,0,.4))",
-              transform: "translateZ(0)",
-              WebkitBackfaceVisibility: "hidden",
-              willChange: "transform",
-            }}
-          />
-          {showCounter && (
-            <span
-              className="rounded-full px-3 py-1 text-sm font-semibold shadow"
-              style={{ background: THEME.accent }}
-            >
-              Ερ. {index + 1} από {QUESTIONS.length}
-            </span>
-          )}
-        </div>
-        <div className="mt-2 text-center text-xs uppercase tracking-wide text-slate-300">
-          {stageLabel(stage)}
-        </div>
-        <div className="mt-2 flex items-center justify-center gap-2">
-          <button onClick={() => { setShowHowTo(true); }} className="pill bg-white text-black">
-            🇬🇷 Οδηγίες
-          </button>
+      <div className="px-3 pt-4">
+        <div className="sticky top-0 z-40">
+          <div
+            className="mx-auto max-w-4xl rounded-2xl backdrop-blur bg-slate-900/40 ring-1 ring-white/10 px-4 py-3"
+            style={{ boxShadow: "0 10px 24px rgba(0,0,0,.25)" }}
+          >
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              {/* Left: Progress */}
+              <div className="min-w-0 sm:flex-1">
+                <div
+                  className="text-sm font-semibold text-slate-200"
+                  aria-label={`Ερώτηση ${current + 1} από ${total}`}
+                >
+                  Ερ. {current + 1} από {total}
+                </div>
+                <div
+                  className="mt-1 h-2 w-full rounded-full bg-white/10 overflow-hidden"
+                  role="progressbar"
+                  aria-valuenow={current + 1}
+                  aria-valuemin={0}
+                  aria-valuemax={total}
+                >
+                  <div
+                    className="h-full rounded-full transition-all duration-300 ease-out"
+                    style={{ width: `${pct}%`, background: THEME.accent }}
+                  />
+                </div>
+              </div>
+
+              {/* Right: Score & Streak */}
+              <div className="flex items-end justify-between gap-8 sm:justify-end">
+                <div
+                  className={`text-right ${justScored ? "hud-score-pop" : ""}`}
+                  aria-label={`Σκορ ${score}`}
+                >
+                  <div className="text-xs uppercase tracking-wide text-slate-300">Σκορ</div>
+                  <div className="text-2xl md:text-3xl font-extrabold text-white">{score}</div>
+                </div>
+
+                {streak > 0 && (
+                  <div
+                    className={`text-right ${justLostStreak ? "hud-streak-shake" : "hud-streak-pulse"}`}
+                    aria-label={`Σειρά ${streak}`}
+                  >
+                    <div className="text-xs uppercase tracking-wide text-slate-300">Σειρά</div>
+                    <div className="flex items-center justify-end gap-1">
+                      <span className="text-base">🔥</span>
+                      <span className="text-lg font-bold text-white">{streak}</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -491,13 +548,53 @@ export default function QuizPrototype() {
 
   function StageCard({ children, variant = "default" }) {
     if (variant === "howto") {
-      return (
-        <div className="surface-howto text-slate-100">
-          {children}
-        </div>
-      );
+      return <div className="surface-howto text-slate-100">{children}</div>;
     }
     return <div className="card">{children}</div>;
+  }
+
+  // ——— NEW: Name Stage ———
+  function NameStage() {
+    const [tempName, setTempName] = useState(p1.name || "");
+    const canProceed = tempName.trim().length >= 2;
+
+    return (
+      <StageCard variant="howto">
+        <div className="text-center">
+          <h1 className="font-display text-3xl font-extrabold">Καλώς ήρθες!</h1>
+          <p className="mt-2 text-slate-300 font-ui">
+            Γράψε το όνομά σου — θα εμφανίζεται στο σκορ και στα αποτελέσματα.
+          </p>
+        </div>
+
+        <div className="mt-5 max-w-md mx-auto">
+          <div className="relative">
+            <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center">👤</span>
+            <input
+              className="w-full rounded-xl bg-slate-900/60 px-3 py-3 pl-9 text-slate-100 outline-none ring-1 ring-white/10 focus:ring-2 focus:ring-pink-400"
+              placeholder="π.χ. Goat"
+              value={tempName}
+              onChange={(e) => setTempName(e.target.value)}
+              maxLength={18}
+              autoFocus
+            />
+          </div>
+
+          <div className="mt-5 flex justify-center">
+            <button
+              className="btn btn-accent px-6 py-3 text-base disabled:opacity-50"
+              onClick={() => {
+                setP1((s) => ({ ...s, name: tempName.trim() }));
+                setStage(STAGES.INTRO);
+              }}
+              disabled={!canProceed}
+            >
+              Προχώρα
+            </button>
+          </div>
+        </div>
+      </StageCard>
+    );
   }
 
   // ——— Intro Stage ———
@@ -512,9 +609,7 @@ export default function QuizPrototype() {
     return (
       <StageCard variant="howto">
         <div className="text-center">
-          <h1 className="font-display text-3xl font-extrabold">
-            Ποδοσφαιρικό Κουίζ
-          </h1>
+          <h1 className="font-display text-3xl font-extrabold">Ποδοσφαιρικό Κουίζ</h1>
           <p className="mt-2 text-slate-300 font-ui">
             Δες τις κατηγορίες και πάτα «Ας παίξουμε» για να ξεκινήσεις.
           </p>
@@ -523,22 +618,13 @@ export default function QuizPrototype() {
         <div className="mt-6 rounded-2xl border border-slate-800/60 bg-slate-900/40">
           <ul className="divide-y divide-slate-800/60">
             {INTRO_CATEGORIES.map((c) => (
-              <li
-                key={c.category}
-                className="px-4 py-3 flex items-center justify-between"
-              >
+              <li key={c.category} className="px-4 py-3 flex items-center justify-between">
                 <div className="min-w-0">
-                  <div className="font-display text-base font-semibold">
-                    {c.category}
-                  </div>
+                  <div className="font-display text-base font-semibold">{c.category}</div>
                   {c.count > 1 && (
-                    <div className="text-xs text-slate-400 mt-0.5">
-                      x{c.count} ερωτήσεις
-                    </div>
+                    <div className="text-xs text-slate-400 mt-0.5">x{c.count} ερωτήσεις</div>
                   )}
                 </div>
-
-                {/* show category points, not count */}
                 <span className="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-bold ring-1 ring-inset
                                   bg-fuchsia-600/20 text-fuchsia-300 ring-fuchsia-500/30">
                   {formatPoints(c.points)}
@@ -546,7 +632,7 @@ export default function QuizPrototype() {
               </li>
             ))}
 
-            {/* Final row — no 'Τελικός' chip, keeps wager range */}
+            {/* Final row — keep wager range */}
             {finalCategoryName && (
               <li className="px-4 py-3 flex items-center justify-between">
                 <div className="min-w-0">
@@ -594,9 +680,7 @@ export default function QuizPrototype() {
         {/* X2 (single button) — HIDDEN on Final */}
         {!isFinalIndex && (
           <div className="mt-5 rounded-2xl bg-slate-900/50 p-4">
-            <div className="mb-2 text-center text-sm text-slate-300 font-ui">
-              Βοήθεια Χ2
-            </div>
+            <div className="mb-2 text-center text-sm text-slate-300 font-ui">Βοήθεια Χ2</div>
             <div className="max-w-2xl mx-auto flex justify-center">
               <X2Control
                 label={p1.name}
@@ -633,230 +717,198 @@ export default function QuizPrototype() {
     );
   }
 
-function QuestionStage() {
-  const mode = q.answerMode || "text";
+  function QuestionStage() {
+    const mode = q.answerMode || "text";
 
-  // Local state for CATALOG
-  const [catPicked, setCatPicked] = useState(null);
-  const [catText, setCatText] = useState("");
+    // Local state for CATALOG
+    const [catPicked, setCatPicked] = useState(null);
+    const [catText, setCatText] = useState("");
 
-  // Local state for TEXT/NUMERIC
-  const [inputValue, setInputValue] = useState(() => playerAnswers[index] ?? "");
+    // Local state for TEXT/NUMERIC
+    const [inputValue, setInputValue] = useState(() => playerAnswers[index] ?? "");
 
-  // Local state for SCORELINE (keep edits local; persist on submit only)
-  const [scoreValue, setScoreValue] = useState(() =>
-    typeof playerAnswers[index] === "object" && playerAnswers[index] !== null
-      ? playerAnswers[index]
-      : { home: 0, away: 0 }
-  );
-
-  useEffect(() => {
-    setInputValue(playerAnswers[index] ?? "");
-    setScoreValue(
+    // Local state for SCORELINE (keep edits local; persist on submit only)
+    const [scoreValue, setScoreValue] = useState(() =>
       typeof playerAnswers[index] === "object" && playerAnswers[index] !== null
         ? playerAnswers[index]
         : { home: 0, away: 0 }
     );
-    setCatPicked(null);
-    setCatText("");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [index]);
 
-  const submitAndReveal = async (value) => {
-    // Build the stored value once, and only persist here
-    let stored;
-    if (mode === "scoreline") {
-      stored = value; // {home, away}
-    } else if (mode === "numeric") {
-      // If user clicked "Δεν γνωρίζω" pass null to avoid accidental 0 being correct
-      if (value === "" || value === null || value === undefined) {
-        stored = { value: null };
+    useEffect(() => {
+      setInputValue(playerAnswers[index] ?? "");
+      setScoreValue(
+        typeof playerAnswers[index] === "object" && playerAnswers[index] !== null
+          ? playerAnswers[index]
+          : { home: 0, away: 0 }
+      );
+      setCatPicked(null);
+      setCatText("");
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [index]);
+
+    const submitAndReveal = async (value) => {
+      // Build the stored value once, and only persist here
+      let stored;
+      if (mode === "scoreline") {
+        stored = value; // {home, away}
+      } else if (mode === "numeric") {
+        // If user clicked "Δεν γνωρίζω" pass null to avoid accidental 0 being correct
+        if (value === "" || value === null || value === undefined) {
+          stored = { value: null };
+        } else {
+          const n = Number(value);
+          stored = { value: Number.isFinite(n) ? n : null };
+        }
       } else {
-        const n = Number(value);
-        stored = { value: Number.isFinite(n) ? n : null };
+        stored = value; // text or catalog
       }
-    } else {
-      stored = value; // text or catalog
-    }
 
-    setPlayerAnswers((prev) => ({
-      ...prev,
-      [index]: typeof stored === "object" && stored?.name ? stored.name : stored,
-    }));
+      setPlayerAnswers((prev) => ({
+        ...prev,
+        [index]: typeof stored === "object" && stored?.name ? stored.name : stored,
+      }));
 
-    setStage(STAGES.ANSWER);
+      setStage(STAGES.ANSWER);
 
-    // Auto-marking for non-text modes
-    if (mode !== "text") {
-      const result = await validateAny(q, stored?.name ? stored : stored);
-      if (!isFinalIndex) {
-        setAnswered((a) => ({ ...a, [index]: result.correct ? "correct" : "wrong" }));
-        if (result.correct) awardToP1(1);
-        else noAnswer();
-      } else {
-        finalizeOutcomeP1(result.correct ? "correct" : "wrong");
+      // Auto-marking for non-text modes
+      if (mode !== "text") {
+        const result = await validateAny(q, stored?.name ? stored : stored);
+        if (!isFinalIndex) {
+          setAnswered((a) => ({ ...a, [index]: result.correct ? "correct" : "wrong" }));
+          if (result.correct) awardToP1(1);
+          else noAnswer();
+        } else {
+          finalizeOutcomeP1(result.correct ? "correct" : "wrong");
+        }
       }
-    }
-  };
+    };
 
-  return (
-    <StageCard>
-      <div className="flex items-center gap-2">
-        <div className="rounded-full bg-slate-700/70 px-3 py-1 text-xs font-semibold">
-          {isFinalIndex ? "Τελικός 0×–3×" : `Κατηγορία ×${q.points || 1}`}
+    return (
+      <StageCard>
+        <div className="flex items-center gap-2">
+          <div className="rounded-full bg-slate-700/70 px-3 py-1 text-xs font-semibold">
+            {isFinalIndex ? "Τελικός 0×–3×" : `Κατηγορία ×${q.points || 1}`}
+          </div>
+          {isX2ActiveFor("p1") && !isFinalIndex && (
+            <div
+              className="rounded-full px-3 py-1 text-xs font-semibold text-white"
+              style={{ background: THEME.badgeGradient }}
+            >
+              ×2
+            </div>
+          )}
         </div>
-        {isX2ActiveFor("p1") && !isFinalIndex && (
-          <div
-            className="rounded-full px-3 py-1 text-xs font-semibold text-white"
-            style={{ background: THEME.badgeGradient }}
-          >
-            {p1.name}: ×2
+
+        <h3 className="mt-4 font-display text-2xl font-bold leading-snug">{q.prompt}</h3>
+
+        {/* Media */}
+        <div className="mt-4">
+          <Media media={q.media} />
+        </div>
+
+        {/* CATALOG */}
+        {mode === "catalog" && (
+          <div className="mt-5">
+            <AutoCompleteAnswer
+              catalog={q.catalog}
+              placeholder="Άρχισε να πληκτρολογείς…"
+              onSelect={(item) => setCatPicked(item)}
+              onChangeText={(t) => setCatText(t)}
+            />
+            <div className="flex flex-wrap gap-3 justify-center mt-3">
+              <button
+                type="button"
+                className="btn btn-accent"
+                onClick={() => {
+                  const toSubmit = (catPicked && catPicked.name) ? catPicked : catText;
+                  submitAndReveal(toSubmit);
+                }}
+                disabled={!((catPicked && catPicked.name) || (catText && catText.trim().length > 0))}
+              >
+                Υποβολή
+              </button>
+              <button type="button" className="btn btn-neutral" onClick={() => submitAndReveal("")}>
+                Δεν γνωρίζω
+              </button>
+            </div>
           </div>
         )}
-      </div>
 
-      <h3 className="mt-4 font-display text-2xl font-bold leading-snug">
-        {q.prompt}
-      </h3>
-
-      {/* Media */}
-      <div className="mt-4">
-        <Media media={q.media} />
-      </div>
-
-      {/* CATALOG */}
-      {mode === "catalog" && (
-        <div className="mt-5">
-          <AutoCompleteAnswer
-            catalog={q.catalog}
-            placeholder="Άρχισε να πληκτρολογείς…"
-            onSelect={(item) => setCatPicked(item)}
-            onChangeText={(t) => setCatText(t)}
-          />
-          <div className="flex flex-wrap gap-3 justify-center mt-3">
-            <button
-              type="button"
-              className="btn btn-accent"
-              onClick={() => {
-                const toSubmit =
-                  (catPicked && catPicked.name) ? catPicked : catText;
-                submitAndReveal(toSubmit);
+        {/* SCORELINE */}
+        {mode === "scoreline" && (
+          <div className="mt-5 flex flex-col items-center gap-3">
+            <ScoreInput
+              value={scoreValue}
+              onChange={(v) => {
+                // keep edits local to avoid parent re-render (prevents video restart)
+                setScoreValue(v);
               }}
-              disabled={
-                !((catPicked && catPicked.name) || (catText && catText.trim().length > 0))
-              }
-            >
-              Υποβολή
-            </button>
-            <button
-              type="button"
-              className="btn btn-neutral"
-              onClick={() => submitAndReveal("")}
-            >
-              Δεν γνωρίζω
-            </button>
+            />
+            <div className="flex flex-wrap gap-3 justify-center">
+              <button type="button" className="btn btn-accent" onClick={() => submitAndReveal(scoreValue)}>
+                Υποβολή σκορ
+              </button>
+              <button type="button" className="btn btn-neutral" onClick={() => submitAndReveal("")}>
+                Δεν γνωρίζω
+              </button>
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* SCORELINE */}
-      {mode === "scoreline" && (
-        <div className="mt-5 flex flex-col items-center gap-3">
-          <ScoreInput
-            value={scoreValue}
-            onChange={(v) => {
-              // keep edits local to avoid parent re-render (prevents video restart)
-              setScoreValue(v);
-            }}
-          />
-          <div className="flex flex-wrap gap-3 justify-center">
-            <button
-              type="button"
-              className="btn btn-accent"
-              onClick={() => submitAndReveal(scoreValue)}
-            >
-              Υποβολή σκορ
-            </button>
-            <button
-              type="button"
-              className="btn btn-neutral"
-              onClick={() => submitAndReveal("")}
-            >
-              Δεν γνωρίζω
-            </button>
-          </div>
-        </div>
-      )}
+        {/* NUMERIC */}
+        {mode === "numeric" && (
+          <form
+            className="mt-5 flex flex-col items-stretch gap-3"
+            onSubmit={(e) => { e.preventDefault(); submitAndReveal(inputValue); }}
+          >
+            <input
+              type="number"
+              inputMode="numeric"
+              className="w-full rounded-xl bg-slate-900/60 px-4 py-3 text-slate-100 outline-none ring-1 ring-white/10 focus:ring-2 focus:ring-pink-400"
+              placeholder="Πληκτρολόγησε αριθμό…"
+              value={inputValue ?? ""}
+              onChange={(e) => setInputValue(e.target.value)}
+            />
+            <div className="flex flex-wrap gap-3 justify-center">
+              <button type="submit" className="btn btn-accent">Υποβολή</button>
+              <button type="button" className="btn btn-neutral" onClick={() => submitAndReveal("")}>
+                Δεν γνωρίζω
+              </button>
+            </div>
+          </form>
+        )}
 
-      {/* NUMERIC */}
-      {mode === "numeric" && (
-        <form
-          className="mt-5 flex flex-col items-stretch gap-3"
-          onSubmit={(e) => {
-            e.preventDefault();
-            submitAndReveal(inputValue);
-          }}
-        >
-          <input
-            type="number"
-            inputMode="numeric"
-            className="w-full rounded-xl bg-slate-900/60 px-4 py-3 text-slate-100 outline-none ring-1 ring-white/10 focus:ring-2 focus:ring-pink-400"
-            placeholder="Πληκτρολόγησε αριθμό…"
-            value={inputValue ?? ""}
-            onChange={(e) => setInputValue(e.target.value)}
-          />
-          <div className="flex flex-wrap gap-3 justify-center">
-            <button type="submit" className="btn btn-accent">
-              Υποβολή
-            </button>
-            <button
-              type="button"
-              className="btn btn-neutral"
-              onClick={() => submitAndReveal("")}
-            >
-              Δεν γνωρίζω
-            </button>
-          </div>
-        </form>
-      )}
-
-      {/* TEXT */}
-      {mode === "text" && (
-        <form
-          className="mt-5 flex flex-col items-stretch gap-3"
-          onSubmit={(e) => {
-            e.preventDefault();
-            submitAndReveal(inputValue);
-          }}
-        >
-          <input
-            className="w-full rounded-xl bg-slate-900/60 px-4 py-3 text-slate-100 outline-none ring-1 ring-white/10 focus:ring-2 focus:ring-pink-400"
-            placeholder="Γράψε την απάντησή σου…"
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            autoComplete="off"
-            autoCapitalize="sentences"
-            spellCheck={false}
-          />
-          <div className="flex flex-wrap gap-3 justify-center">
-            <button type="submit" className="btn btn-accent">
-              Υποβολή
-            </button>
-            <button
-              type="button"
-              className="btn btn-neutral"
-              onClick={() => submitAndReveal("")}
-              title="Μετάβαση στην απάντηση χωρίς να δοθεί λύση"
-            >
-              Δεν γνωρίζω
-            </button>
-          </div>
-        </form>
-      )}
-    </StageCard>
-  );
-}
-
+        {/* TEXT */}
+        {mode === "text" && (
+          <form
+            className="mt-5 flex flex-col items-stretch gap-3"
+            onSubmit={(e) => { e.preventDefault(); submitAndReveal(inputValue); }}
+          >
+            <input
+              className="w-full rounded-xl bg-slate-900/60 px-4 py-3 text-slate-100 outline-none ring-1 ring-white/10 focus:ring-2 focus:ring-pink-400"
+              placeholder="Γράψε την απάντησή σου…"
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              autoComplete="off"
+              autoCapitalize="sentences"
+              spellCheck={false}
+            />
+            <div className="flex flex-wrap gap-3 justify-center">
+              <button type="submit" className="btn btn-accent">Υποβολή</button>
+              <button
+                type="button"
+                className="btn btn-neutral"
+                onClick={() => submitAndReveal("")}
+                title="Μετάβαση στην απάντηση χωρίς να δοθεί λύση"
+              >
+                Δεν γνωρίζω
+              </button>
+            </div>
+          </form>
+        )}
+      </StageCard>
+    );
+  }
 
   function AnswerStage() {
     const mode = q.answerMode || "text";
@@ -872,7 +924,7 @@ function QuestionStage() {
       userAnswerStr = rawUser ? String(rawUser) : "—";
     }
 
-    // NEW: correctness & delta for this question
+    // correctness & delta for this question
     const outcomeKey = answered[index];
     const currentRow = RESULT_ROWS[index] || null;
     const isCorrect = outcomeKey === "correct" || outcomeKey === "final-correct";
@@ -882,9 +934,7 @@ function QuestionStage() {
     return (
       <StageCard>
         <div className="text-center">
-          <div className="font-display text-3xl font-extrabold">
-            {q.answer}
-          </div>
+          <div className="font-display text-3xl font-extrabold">{q.answer}</div>
 
           {/* Player answer — colored and with badge */}
           <div className="mt-3 font-ui text-sm">
@@ -914,20 +964,16 @@ function QuestionStage() {
             </div>
           </div>
 
-          {q.fact && (
-            <div className="mt-2 font-ui text-sm text-slate-300">
-              ℹ️ {q.fact}
-            </div>
-          )}
+          {q.fact && <div className="mt-2 font-ui text-sm text-slate-300">ℹ️ {q.fact}</div>}
         </div>
 
         {/* X2 status reminder */}
         <div className="mt-3 text-center text-xs text-slate-400 font-ui">
-          {isX2ActiveFor("p1") && !isFinalIndex && <span>({p1.name}: ×2 ενεργό)</span>}
+          {isX2ActiveFor("p1") && !isFinalIndex && <span>(×2 ενεργό)</span>}
         </div>
 
         {/* Manual awarding controls (only for text mode) */}
-        {!isFinalIndex && (mode === "text") && (
+        {!isFinalIndex && mode === "text" && (
           <div className="mt-6 flex flex-col items-center gap-3 font-ui">
             <div className="flex flex-wrap justify-center gap-2">
               <button
@@ -956,9 +1002,7 @@ function QuestionStage() {
             <div className="mb-2 text-sm text-slate-300">
               Τελικός — Απονέμονται πόντοι βάσει πονταρίσματος
             </div>
-            <div className="text-xs text-slate-400 mb-3">
-              Το Χ2 δεν ισχύει στον Τελικό.
-            </div>
+            <div className="text-xs text-slate-400 mb-3">Το Χ2 δεν ισχύει στον Τελικό.</div>
             <div className="space-y-2">
               <div className="text-sm text-slate-300">{p1.name}</div>
               <div className="flex flex-wrap justify-center gap-2">
@@ -978,9 +1022,7 @@ function QuestionStage() {
                 >
                   Λάθος −{wager.p1}
                 </button>
-                {finalResolved.p1 && (
-                  <span className="text-xs text-emerald-300">Ολοκληρώθηκε ✔</span>
-                )}
+                {finalResolved.p1 && <span className="text-xs text-emerald-300">Ολοκληρώθηκε ✔</span>}
               </div>
             </div>
           </div>
@@ -1002,17 +1044,14 @@ function QuestionStage() {
           category: r.category,
           points: r.base ?? 0,
           isFinal: r.isFinal,
-          // Show correct/wrong for all rows (including final)
           correct: r.outcome === "Σωστό" ? true : r.outcome === "Λάθος" ? false : null,
           x2: !!r.x2Applied,
-          // Show the player's typed answer (stringify simple objects)
           answerText:
             typeof r.userAnswer === "object" && r.userAnswer
               ? (r.userAnswer.home != null && r.userAnswer.away != null)
                 ? `${r.userAnswer.home} - ${r.userAnswer.away}`
                 : (r.userAnswer.value != null ? String(r.userAnswer.value) : "")
               : (r.userAnswer || ""),
-          // Show streak **bonus points** (+1 when applicable) not raw count
           streakPoints: !r.isFinal && r.bonus ? 1 : 0,
           delta: r.delta,
           total: r.running,
@@ -1035,12 +1074,7 @@ function QuestionStage() {
 
   // ——— Single-button X2 control ———
   function X2Control({ label, side, available, armed, onArm, isFinal }) {
-    const status = available
-      ? "Χ2 διαθέσιμο"
-      : armed
-      ? "Χ2 ενεργό"
-      : "Χ2 χρησιμοποιήθηκε";
-
+    const status = available ? "Χ2 διαθέσιμο" : armed ? "Χ2 ενεργό" : "Χ2 χρησιμοποιήθηκε";
     const clickable = available && !isFinal && canArmX2(side);
 
     return (
@@ -1061,9 +1095,7 @@ function QuestionStage() {
         >
           {status}
         </button>
-        <div className="mt-2 text-xs text-slate-400">
-          Μπορεί να χρησιμοποιηθεί μόνο μία φορά.
-        </div>
+        <div className="mt-2 text-xs text-slate-400">Μπορεί να χρησιμοποιηθεί μόνο μία φορά.</div>
       </div>
     );
   }
@@ -1073,76 +1105,67 @@ function QuestionStage() {
       <div className="card font-ui text-center flex flex-col items-center">
         <div className="mb-3 text-sm text-slate-300">{label}</div>
         <div className="flex items-center gap-2 justify-center">
-          <button className="btn btn-neutral" onClick={() => onChange(value - 1)}>
-            −
-          </button>
-          <div
-            className="pill text-white text-xl px-5 py-2"
-            style={{ background: THEME.badgeGradient }}
-          >
+          <button className="btn btn-neutral" onClick={() => onChange(value - 1)}>−</button>
+          <div className="pill text-white text-xl px-5 py-2" style={{ background: THEME.badgeGradient }}>
             {value}
           </div>
-          <button className="btn btn-neutral" onClick={() => onChange(value + 1)}>
-            +
-          </button>
+          <button className="btn btn-neutral" onClick={() => onChange(value + 1)}>+</button>
         </div>
         <div className="mt-2 text-xs text-slate-400">Ποντάρισμα 0–3 πόντοι</div>
       </div>
     );
   }
 
-function NavButtons() {
-  const nextDisabled =
-    stage === STAGES.ANSWER
-      ? (!isFinalIndex ? !answered[index] : !finalResolved.p1)
-      : false;
+  // ——— Single-forward Nav ———
+  function NavButtons() {
+    const nextDisabled =
+      stage === STAGES.ANSWER
+        ? (!isFinalIndex ? !answered[index] : !finalResolved.p1)
+        : false;
 
-  const isFinalAnswerStage = stage === STAGES.ANSWER && isFinalIndex;
+    const isFinalAnswerStage = stage === STAGES.ANSWER && isFinalIndex;
 
-  // On the last question's Answer stage: show one CTA to go to results
-  if (isFinalAnswerStage) {
+    // On the last question's Answer stage: show one CTA to go to results
+    if (isFinalAnswerStage) {
+      return (
+        <div className="flex items-center justify-center">
+          <button
+            onClick={() => setStage(STAGES.RESULTS)}
+            className="btn btn-accent disabled:opacity-50"
+            disabled={nextDisabled}
+            title={nextDisabled ? "Καταχώρισε πρώτα την απάντηση" : "Προβολή αποτελεσμάτων"}
+          >
+            Δες πώς τα πήγες →
+          </button>
+        </div>
+      );
+    }
+
+    const label =
+      stage === STAGES.CATEGORY
+        ? "επόμενη ερώτηση"
+        : stage === STAGES.ANSWER
+        ? "Επόμενη κατηγορία"
+        : "Επόμενο →";
+
+    const title =
+      stage === STAGES.ANSWER && nextDisabled
+        ? "Καταχώρισε πρώτα την απάντηση"
+        : "Επόμενο";
+
     return (
       <div className="flex items-center justify-center">
         <button
-          onClick={() => setStage(STAGES.RESULTS)}
+          onClick={next}
           className="btn btn-accent disabled:opacity-50"
           disabled={nextDisabled}
-          title={nextDisabled ? "Καταχώρισε πρώτα την απάντηση" : "Προβολή αποτελεσμάτων"}
+          title={title}
         >
-          Δες πώς τα πήγες →
+          {label}
         </button>
       </div>
     );
   }
-
-  // Single-button navigation everywhere else
-  const label =
-    stage === STAGES.CATEGORY
-      ? "Επόμενη ερώτηση"
-      : stage === STAGES.ANSWER
-      ? "Επόμενη κατηγορία"
-      : "Επόμενο →";
-
-  const title =
-    stage === STAGES.ANSWER && nextDisabled
-      ? "Καταχώρισε πρώτα την απάντηση"
-      : "Επόμενο";
-
-  return (
-    <div className="flex items-center justify-center">
-      <button
-        onClick={next}
-        className="btn btn-accent disabled:opacity-50"
-        disabled={nextDisabled}
-        title={title}
-      >
-        {label}
-      </button>
-    </div>
-  );
-}
-
-
 
   // ——— Lightweight self-tests ———
   useEffect(() => {
@@ -1176,30 +1199,26 @@ function NavButtons() {
       }}
     >
       <div className="w-full max-w-4xl space-y-4 text-slate-100">
-        <Header />
-        {showHowTo && (
-          <HowToModal
-            onClose={() => setShowHowTo(false)}
-          />
-        )}
+        {/* NEW HUD header */}
+        <HUDHeader
+          current={index}
+          total={QUESTIONS.length}
+          score={p1.score}
+          streak={p1.streak}
+          justScored={justScored}
+          justLostStreak={justLostStreak}
+        />
 
+        {/* Optional HowTo modal trigger if needed in future:
+            <button onClick={() => setShowHowTo(true)} className="pill bg-white text-black">Οδηγίες</button>
+        */}
+        {showHowTo && <HowToModal onClose={() => setShowHowTo(false)} />}
+
+        {stage === STAGES.NAME && <NameStage />}
         {stage === STAGES.INTRO && <IntroStage />}
         {stage === STAGES.CATEGORY && <CategoryStage />}
         {stage === STAGES.QUESTION && <QuestionStage />}
         {stage === STAGES.ANSWER && <AnswerStage />}
-
-        {/* Score panel (only on gameplay: Category/Question/Answer) */}
-        {stage !== STAGES.RESULTS && stage !== STAGES.INTRO && (
-          <>
-            <div className="mt-2 text-center text-lg font-semibold font-ui">
-              Σκορ
-            </div>
-            <div className="grid grid-cols-1 gap-4 max-w-3xl mx-auto">
-              <PlayerPanel side="p1" player={p1} setPlayer={setP1} />
-            </div>
-          </>
-        )}
-
         {stage === STAGES.RESULTS && <ResultsStage />}
 
         <div className="flex flex-wrap items-center justify-between gap-3 pt-2 text-xs text-slate-300 font-ui">
@@ -1217,6 +1236,8 @@ function NavButtons() {
 
 function stageLabel(stage) {
   switch (stage) {
+    case STAGES.NAME:
+      return "Όνομα παίκτη";
     case STAGES.INTRO:
       return "Εισαγωγή";
     case STAGES.CATEGORY:
@@ -1234,85 +1255,6 @@ function stageLabel(stage) {
   }
 }
 
-function PlayerPanel({ side, player, setPlayer }) {
-  const name = (player.name ?? "").trim();
-  const needsNudge = name.length === 0;
-
-  return (
-    <div className="card font-ui">
-      {/* Non-blocking inline nudge while empty */}
-      {needsNudge && (
-        <div className="mb-3 flex items-center gap-2 rounded-lg border border-indigo-400/30 bg-indigo-500/10 px-3 py-2 text-xs text-indigo-200">
-          <span className="text-base">✍️</span>
-          <span>Γράψε το όνομά σου (προαιρετικό) — θα φαίνεται στο σκορ & στα αποτελέσματα.</span>
-        </div>
-      )}
-
-      <div className="mb-4 flex items-start justify-between gap-4">
-        <div className="flex-1">
-          <label
-            htmlFor={`player-name-${side}`}
-            className="mb-1 block text-sm font-semibold text-slate-200"
-          >
-            Όνομα παίκτη <span className="font-normal text-slate-400"></span>
-          </label>
-
-          <div className={`relative ${needsNudge ? "animate-pulse" : ""}`}>
-            <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center">👤</span>
-            <input
-              id={`player-name-${side}`}
-              className={[
-                "w-full rounded-xl bg-slate-900/60 px-3 py-2 pl-9 text-slate-100 outline-none",
-                "ring-1 ring-slate-700 focus:ring-2 focus:ring-indigo-400",
-                needsNudge ? "ring-2 ring-indigo-400" : "",
-              ].join(" ")}
-              value={player.name}
-              onChange={(e) => setPlayer((s) => ({ ...s, name: e.target.value }))}
-              aria-label="όνομα παίκτη"
-              aria-describedby={`player-name-help-${side}`}
-              placeholder="π.χ. Goat"
-              autoComplete="off"
-              autoCorrect="off"
-              enterKeyHint="done"
-              autoFocus={needsNudge}
-              maxLength={18}
-            />
-          </div>
-
-          <p
-            id={`player-name-help-${side}`}
-            className="mt-1 text-xs text-slate-400"
-          >
-            Το όνομα θα εμφανίζεται στο badge του σκορ και στο τελικό ταμπλό. Μπορείς να το αφήσεις κενό.
-          </p>
-        </div>
-
-        <div
-          className="shrink-0 rounded-full px-6 py-3 text-2xl font-extrabold text-white md:text-4xl"
-          style={{ background: THEME.badgeGradient }}
-          aria-label="Σκορ"
-          title={needsNudge ? "Πρόσθεσε όνομα για προσωποποιημένο σκορ" : "Σκορ"}
-        >
-          {player.score}
-        </div>
-      </div>
-
-      <div className="flex items-center justify-between text-sm">
-        <div className="flex items-center gap-2">
-          <span className="text-slate-300">Σερί:</span>
-          <span
-            className="pill text-amber-200"
-            style={{ background: "rgba(245, 158, 11, 0.25)" }}
-          >
-            {player.streak > 0 ? `🔥 +${player.streak}` : "—"}
-          </span>
-          <span className="text-xs text-slate-500">(μέγ. {player.maxStreak})</span>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function HowToModal({ onClose, totalQuestions = 9 }) {
   useEffect(() => {
     const onKey = (e) => {
@@ -1326,11 +1268,9 @@ function HowToModal({ onClose, totalQuestions = 9 }) {
     <div className="fixed inset-0 z-50 overflow-y-auto" role="dialog" aria-modal="true">
       <div className="fixed inset-0 bg-black/60" onClick={onClose} />
       <div className="min-h-full flex items-start sm:items-center justify-center p-4 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
-        <div className="relative w-full max-w-[680px] font-ui rounded-2xl shadow-xl ring-1 ring-white/10 bg-[var(--howto-bg)] text-slate-100 flex flex-col overflow-hidden max-h-[clamp(420px,85dvh,760px)]">
+        <div className="relative w-full max-w=[680px] max-w-[680px] font-ui rounded-2xl shadow-xl ring-1 ring-white/10 bg-[var(--howto-bg)] text-slate-100 flex flex-col overflow-hidden max-h-[clamp(420px,85dvh,760px)]">
           <div className="sticky top-0 z-10 px-6 py-4 bg-[var(--howto-bg)] backdrop-blur-sm rounded-t-2xl flex items-center justify-between border-b border-white/10">
-            <h2 className="font-display text-2xl font-extrabold">
-              Πώς παίζεται
-            </h2>
+            <h2 className="font-display text-2xl font-extrabold">Πώς παίζεται</h2>
             <div className="flex items-center gap-2">
               <button onClick={onClose} className="btn btn-neutral">Κλείσιμο ✕</button>
             </div>
@@ -1340,10 +1280,10 @@ function HowToModal({ onClose, totalQuestions = 9 }) {
             <ul className="mt-2 list-disc pl-5 space-y-2">
               <li><strong>{totalQuestions} ερωτήσεις.</strong> Κάθε μία έχει συγκεκριμένους πόντους (ανάλογα με τη δυσκολία).</li>
               <li><strong>Στόχος:</strong> μάζεψε όσο περισσότερους πόντους μπορείς.</li>
-              <li><strong>Ροή:</strong> Εισαγωγή → Κατηγορία → Ερώτηση → Απάντηση.</li>
-              <li><strong>Χ2:</strong> Όταν εμφανίζεται η Κατηγορία μπορείς να ενεργοποιήσεις το Χ2. Αυτο μπορεί να γίνει <strong>μία φορά</strong> ανά παιχνίδι. Διπλασιάζει μόνο τους πόντους αυτής της ερώτησης.</li>
-              <li><strong>Σερί:</strong> Από την <strong>3η συνεχόμενη σωστή</strong> και μετά, παίρνεις έξτρα <strong>+1</strong> (δεν διπλασιάζεται). Το σερί ξεκινά πάλι από την αρχή όταν χαθεί μια ερώτηση.</li>
-              <li><strong>Τελική ερώτηση (στοίχημα 0–3):</strong> Πριν εμφανιστεί η τελευταία ερώτηση, διάλεξε πόσους πόντους θα ρισκάρεις (0–3). Αν απαντήσεις σωστά, <strong>κερδίζεις</strong> τόσους πόντους· αν απαντήσεις λάθος ή δεν απαντήσεις, <strong>χάνεις</strong> τους ίδιους πόντους. Αν βάλεις 0, ούτε κερδίζεις ούτε χάνεις. <em>Το Χ2 δεν επιτρέπεται και δεν προστίθεται το bonus του σερί.</em> <span className="block text-slate-400 mt-1 text-[0.95em]">Παράδειγμα: σκορ 15 και στοίχημα 2 → σωστό = 17, λάθος/καμία απάντηση = 13.</span></li>
+              <li><strong>Ροή:</strong> Όνομα → Εισαγωγή → Κατηγορία → Ερώτηση → Απάντηση.</li>
+              <li><strong>Χ2:</strong> Στο στάδιο Κατηγορίας μπορείς να ενεργοποιήσεις το Χ2. Αυτό γίνεται <strong>μία φορά</strong> ανά παιχνίδι.</li>
+              <li><strong>Σερί:</strong> Από την <strong>3η συνεχόμενη σωστή</strong> και μετά, παίρνεις έξτρα <strong>+1</strong> (δεν διπλασιάζεται).</li>
+              <li><strong>Τελική ερώτηση (στοίχημα 0–3):</strong> Πριν την τελευταία ερώτηση, διάλεξε πόσους πόντους θα ρισκάρεις (0–3). Αν απαντήσεις σωστά, <strong>κερδίζεις</strong> τόσους πόντους· αν απαντήσεις λάθος/δεν απαντήσεις, <strong>χάνεις</strong> τους ίδιους. <em>Το Χ2 δεν ισχύει στον Τελικό.</em></li>
             </ul>
             <div className="howto-shadow" />
           </div>
