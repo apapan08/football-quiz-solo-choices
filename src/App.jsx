@@ -1115,23 +1115,33 @@ function NavButtons() {
     );
   }
 
-  // Default (all other stages)
+  // Single-button navigation everywhere else
+  const label =
+    stage === STAGES.CATEGORY
+      ? "Επόμενη ερώτηση"
+      : stage === STAGES.ANSWER
+      ? "Επόμενη κατηγορία"
+      : "Επόμενο →";
+
+  const title =
+    stage === STAGES.ANSWER && nextDisabled
+      ? "Καταχώρισε πρώτα την απάντηση"
+      : "Επόμενο";
+
   return (
-    <div className="flex items-center justify-center gap-3">
-      <button onClick={previous} className="btn btn-neutral">
-        ← Προηγούμενο
-      </button>
+    <div className="flex items-center justify-center">
       <button
         onClick={next}
         className="btn btn-accent disabled:opacity-50"
         disabled={nextDisabled}
-        title={nextDisabled ? "Καταχώρισε πρώτα την απάντηση" : "Επόμενο"}
+        title={title}
       >
-        Επόμενο →
+        {label}
       </button>
     </div>
   );
 }
+
 
 
   // ——— Lightweight self-tests ———
