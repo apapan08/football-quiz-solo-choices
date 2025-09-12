@@ -22,6 +22,25 @@ import Media from "./components/Media";
 
 const SOLO = true;
 
+// stable logo path (use the one that actually exists)
+const LOGO_SRC = "/logo.png";
+
+// Memoized logo so React won't re-render it unless props change
+const Logo = React.memo(function Logo() {
+  return (
+    <img
+      src={LOGO_SRC}
+      alt="Λογότυπο"
+      className="h-7 w-auto"
+      draggable="false"
+      decoding="async"
+      loading="eager"
+      fetchpriority="high"
+      style={{ filter: "drop-shadow(0 1px 1.5px rgba(0,0,0,.4))" }}
+    />
+  );
+});
+
 // ——— Brand font wiring ———
 const FONT_LINK_HREF =
   "https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Noto+Sans:wght@400;700&display=swap&subset=greek";
@@ -668,16 +687,7 @@ function IntroStage() {
       <StageCard>
         {/* Header row: logo (left) + category chip (right) */}
         <div className="flex items-center justify-between">
-          <img
-            src="/.logo.png"
-            onError={(e) => (e.currentTarget.src = "/logo.png")}
-            alt="Λογότυπο"
-            className="h-7 w-auto"
-            loading="eager"
-            decoding="sync"
-            fetchpriority="high"
-            style={{ filter: "drop-shadow(0 1px 1.5px rgba(0,0,0,.4))" }}
-          />
+          <Logo />
           <div className="flex items-center gap-2">
             <div className="pill text-white bg-slate-700/70">
               {isFinalIndex ? "Τελικός 0×–3×" : `Κατηγορία ×${q.points || 1}`}
@@ -800,16 +810,7 @@ function QuestionStage() {
     <StageCard>
       {/* Header: logo left, chips right */}
       <div className="flex items-center justify-between">
-        <img
-          src="/.logo.png"
-          onError={(e) => (e.currentTarget.src = "/logo.png")}
-          alt="Λογότυπο"
-          className="h-7 w-auto"
-          loading="eager"
-          decoding="sync"
-          fetchpriority="high"
-          style={{ filter: "drop-shadow(0 1px 1.5px rgba(0,0,0,.4))" }}
-        />
+        <Logo /> 
         <div className="flex items-center gap-2">
           <div className="rounded-full bg-slate-700/70 px-3 py-1 text-xs font-semibold">
             {isFinalIndex ? "Τελικός 0×–3×" : `Κατηγορία ×${q.points || 1}`}
@@ -955,16 +956,7 @@ function AnswerStage() {
     <StageCard>
       {/* Header: show logo on the left; optional chip on the right */}
       <div className="flex items-center justify-between">
-        <img
-          src="/.logo.png"
-          onError={(e) => (e.currentTarget.src = "/logo.png")}
-          alt="Λογότυπο"
-          className="h-7 w-auto"
-          loading="eager"
-          decoding="sync"
-          fetchpriority="high"
-          style={{ filter: "drop-shadow(0 1px 1.5px rgba(0,0,0,.4))" }}
-        />
+        <Logo />
         <div className="rounded-full bg-slate-700/70 px-3 py-1 text-xs font-semibold">
           {isFinalIndex ? "Τελικός 0×–3×" : `Κατηγορία ×${q.points || 1}`}
         </div>
@@ -1214,7 +1206,7 @@ function AnswerStage() {
 
     const label =
       stage === STAGES.CATEGORY
-        ? "επόμενη ερώτηση"
+        ? "Επόμενη ερώτηση"
         : stage === STAGES.ANSWER
         ? "Επόμενη κατηγορία"
         : "Επόμενο →";
