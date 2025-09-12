@@ -695,6 +695,7 @@ function HUDHeader({ stage, current, total, score, streak, justScored, justLostS
                 available={x2.p1.available}
                 onArm={() => armX2("p1")}
                 isFinal={isFinalIndex}
+                stage={stage}
               />
             </div>
           </div>
@@ -1079,32 +1080,72 @@ function HUDHeader({ stage, current, total, score, streak, justScored, justLostS
   }
 
   // ——— Single-button X2 control ———
-  function X2Control({ label, side, available, armed, onArm, isFinal }) {
-    const status = available ? "Χ2 διαθέσιμο" : armed ? "Χ2 ενεργό" : "Χ2 χρησιμοποιήθηκε";
-    const clickable = available && !isFinal && canArmX2(side);
+function X2Control({ label, side, available, armed, onArm, isFinal, stage }) {
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
-    return (
-      <div className="card font-ui mx-auto text-center">
-        <div className="mb-3 text-sm text-slate-300">{label}</div>
-        <button
-          className="rounded-full px-4 py-2 text-white font-extrabold shadow"
-          style={{ background: THEME.badgeGradient }}
-          onClick={() => clickable && onArm()}
-          disabled={!clickable}
-          title={
-            isFinal
-              ? "Δεν επιτρέπεται στον Τελικό"
-              : available
-              ? "Ενεργοποίηση Χ2 για αυτόν τον γύρο"
-              : "Δεν απομένει Χ2"
-          }
-        >
-          {status}
-        </button>
-        <div className="mt-2 text-xs text-slate-400">Μπορεί να χρησιμοποιηθεί μόνο μία φορά.</div>
-      </div>
-    );
+  const clickable = available && !isFinal && stage === STAGES.CATEGORY && !armed;
+
+  function handlePrimaryClick() {
+    if (!clickable) return;
+    setConfirmOpen(true); // ask before arming
   }
+
+  function confirmArm() {
+    setConfirmOpen(false);
+    onArm(); // parent sets available=false, armedIndex=index
+  }
+
+  const statusText = (() => {
+    if (isFinal) return "Δεν επιτρέπεται στον Τελικό.";
+    if (armed) return "Χ2 ενεργό για αυτή την ερώτηση.";
+    if (!available) return "Χ2 χρησιμοποιήθηκε.";
+    return "Μπορεί να χρησιμοποιηθεί μόνο μία φορά.";
+  })();
+
+  return (
+    <div className="card font-ui mx-auto text-center relative">
+      {label ? <div className="mb-3 text-sm text-slate-300">{label}</div> : null}
+
+      <button
+        className={[
+          "rounded-full px-5 py-2.5 text-white font-extrabold shadow transition",
+          clickable
+            ? "hover:brightness-110 focus:outline-none focus:ring-2 focus:ring-pink-400"
+            : "opacity-60 cursor-not-allowed",
+        ].join(" ")}
+        style={{ background: THEME.badgeGradient }}
+        onClick={handlePrimaryClick}
+        disabled={!clickable}
+        aria-disabled={!clickable}
+        aria-label="Ενεργοποίηση Χ2"
+      >
+        {armed ? "Χ2 ενεργό" : "⚡ Ενεργοποίηση Χ2"}
+      </button>
+
+      <div className="mt-2 text-xs text-slate-400">{statusText}</div>
+
+      {/* Inline confirm popover */}
+      {confirmOpen && (
+        <div
+          className="absolute left-1/2 -translate-x-1/2 top-full mt-3 w-[min(92vw,320px)] rounded-xl bg-slate-900/95 ring-1 ring-white/10 p-3 shadow-xl"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Επιβεβαίωση Χ2"
+        >
+          <div className="text-sm text-slate-200 font-semibold mb-1">Ενεργοποίηση Χ2;</div>
+          <div className="text-xs text-slate-400 mb-3">
+            Θα διπλασιάσει τους πόντους αυτής της ερώτησης. Συνέχεια;
+          </div>
+          <div className="flex justify-end gap-2">
+            <button className="btn btn-neutral" onClick={() => setConfirmOpen(false)}>Άκυρο</button>
+            <button className="btn btn-accent" onClick={confirmArm}>Ναι, ενεργοποίηση</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 
   function WagerControl({ label, value, onChange }) {
     return (
