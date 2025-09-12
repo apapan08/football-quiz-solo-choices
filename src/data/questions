@@ -124,7 +124,7 @@ export const questions = [
   {
     id: "q8-atletico-record-sale",
     order: 8,
-    category: "Στατιστικά παίκτη",
+    category: "Μεταγραφές",
     points: 2,
     lang: "el",
     prompt:
