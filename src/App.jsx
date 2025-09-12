@@ -483,68 +483,74 @@ export default function QuizPrototype() {
   }
 
   // ——— UI subcomponents ———
-  function HUDHeader({ current, total, score, streak, justScored, justLostStreak }) {
-    const pct = total > 0 ? ((current + 1) / total) * 100 : 0;
+function HUDHeader({ stage, current, total, score, streak, justScored, justLostStreak }) {
+  const isPreGame = stage === STAGES.NAME || stage === STAGES.INTRO;
+  const shownCurrent = isPreGame ? 0 : (current + 1);
+  const pct = total > 0 ? (shownCurrent / total) * 100 : 0;
 
-    return (
-      <div className="px-3 pt-4">
-        <div className="sticky top-0 z-40">
-          <div
-            className="mx-auto max-w-4xl rounded-2xl backdrop-blur bg-slate-900/40 ring-1 ring-white/10 px-4 py-3"
-            style={{ boxShadow: "0 10px 24px rgba(0,0,0,.25)" }}
-          >
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              {/* Left: Progress */}
-              <div className="min-w-0 sm:flex-1">
+  const progressText = isPreGame ? "Έναρξη" : `Ερ. ${current + 1} από ${total}`;
+  const ariaText = isPreGame ? `Έναρξη — ${total} ερωτήσεις` : `Ερώτηση ${current + 1} από ${total}`;
+
+  return (
+    <div className="px-3 pt-4">
+      <div className="sticky top-0 z-40">
+        <div
+          className="mx-auto max-w-4xl rounded-2xl backdrop-blur bg-slate-900/40 ring-1 ring-white/10 px-4 py-3"
+          style={{ boxShadow: "0 10px 24px rgba(0,0,0,.25)" }}
+        >
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            {/* Left: Progress */}
+            <div className="min-w-0 sm:flex-1">
+              <div
+                className="text-sm font-semibold text-slate-200"
+                aria-label={ariaText}
+              >
+                {progressText}
+              </div>
+              <div
+                className="mt-1 h-2 w-full rounded-full bg-white/10 overflow-hidden"
+                role="progressbar"
+                aria-valuenow={shownCurrent}
+                aria-valuemin={0}
+                aria-valuemax={total}
+              >
                 <div
-                  className="text-sm font-semibold text-slate-200"
-                  aria-label={`Ερώτηση ${current + 1} από ${total}`}
-                >
-                  Ερ. {current + 1} από {total}
-                </div>
-                <div
-                  className="mt-1 h-2 w-full rounded-full bg-white/10 overflow-hidden"
-                  role="progressbar"
-                  aria-valuenow={current + 1}
-                  aria-valuemin={0}
-                  aria-valuemax={total}
-                >
-                  <div
-                    className="h-full rounded-full transition-all duration-300 ease-out"
-                    style={{ width: `${pct}%`, background: THEME.accent }}
-                  />
-                </div>
+                  className="h-full rounded-full transition-all duration-300 ease-out"
+                  style={{ width: `${pct}%`, background: THEME.accent }}
+                />
+              </div>
+            </div>
+
+            {/* Right: Score & Streak */}
+            <div className="flex items-end justify-between gap-8 sm:justify-end">
+              <div
+                className={`text-right ${justScored ? "hud-score-pop" : ""}`}
+                aria-label={`Σκορ ${score}`}
+              >
+                <div className="text-xs uppercase tracking-wide text-slate-300">Σκορ</div>
+                <div className="text-2xl md:text-3xl font-extrabold text-white">{score}</div>
               </div>
 
-              {/* Right: Score & Streak */}
-              <div className="flex items-end justify-between gap-8 sm:justify-end">
+              {streak > 0 && !isPreGame && (
                 <div
-                  className={`text-right ${justScored ? "hud-score-pop" : ""}`}
-                  aria-label={`Σκορ ${score}`}
+                  className={`text-right ${justLostStreak ? "hud-streak-shake" : "hud-streak-pulse"}`}
+                  aria-label={`Σειρά ${streak}`}
                 >
-                  <div className="text-xs uppercase tracking-wide text-slate-300">Σκορ</div>
-                  <div className="text-2xl md:text-3xl font-extrabold text-white">{score}</div>
-                </div>
-
-                {streak > 0 && (
-                  <div
-                    className={`text-right ${justLostStreak ? "hud-streak-shake" : "hud-streak-pulse"}`}
-                    aria-label={`Σειρά ${streak}`}
-                  >
-                    <div className="text-xs uppercase tracking-wide text-slate-300">Σειρά</div>
-                    <div className="flex items-center justify-end gap-1">
-                      <span className="text-base">🔥</span>
-                      <span className="text-lg font-bold text-white">{streak}</span>
-                    </div>
+                  <div className="text-xs uppercase tracking-wide text-slate-300">Σειρά</div>
+                  <div className="flex items-center justify-end gap-1">
+                    <span className="text-base">🔥</span>
+                    <span className="text-lg font-bold text-white">{streak}</span>
                   </div>
-                )}
-              </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
       </div>
-    );
-  }
+    </div>
+  );
+}
+
 
   function StageCard({ children, variant = "default" }) {
     if (variant === "howto") {
@@ -1143,7 +1149,7 @@ export default function QuizPrototype() {
 
     const label =
       stage === STAGES.CATEGORY
-        ? "επόμενη ερώτηση"
+        ? "Επόμενη ερώτηση"
         : stage === STAGES.ANSWER
         ? "Επόμενη κατηγορία"
         : "Επόμενο →";
@@ -1201,6 +1207,7 @@ export default function QuizPrototype() {
       <div className="w-full max-w-4xl space-y-4 text-slate-100">
         {/* NEW HUD header */}
         <HUDHeader
+          stage={stage}
           current={index}
           total={QUESTIONS.length}
           score={p1.score}
