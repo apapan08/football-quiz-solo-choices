@@ -7,6 +7,9 @@ import ResultsTableResponsive from "./components/ResultsTableResponsive";
 import AutoCompleteAnswer from "./components/AutoCompleteAnswer";
 import ScoreInput from "./components/ScoreInput";
 import { validate as baseValidate } from "./lib/validators";
+// src/App.jsx
+import { useMediaPrefetch } from "./hooks/useMediaPrefetch";
+
 
 // Media
 import Media from "./components/Media";

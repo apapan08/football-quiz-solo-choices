@@ -1,9 +1,26 @@
 // src/data/questions.js
 export const questions = [
+
+  {
+    id: "q4-saka-second-nationality",
+    order: 1,
+    category: "Εθνικότητες",
+    points: 1,
+    lang: "el",
+    prompt: "Ποια είναι η 2η εθνικότητα του Bukayo Saka;",
+    type: "open",
+
+    answerMode: "catalog",
+    catalog: "countries",
+    acceptKeys: ["NG"],
+    accept: ["Nigeria", "Νιγηρία"],
+    answer: "Νιγηρία",
+  },
+
   // 1) Iconic match — scoreline (video)
   {
     id: "q1-iconic-chelsea-barca-score",
-    order: 1,
+    order: 2,
     category: "Iconic Matches",
     points: 1,
     lang: "el",
@@ -21,7 +38,7 @@ export const questions = [
   // 2) Career → Emre Can (image)
   {
     id: "q2-career-emre-can",
-    order: 2,
+    order: 3,
     category: "Βιογραφικό παίκτη",
     points: 1,
     lang: "el",
@@ -38,7 +55,7 @@ export const questions = [
   // 3) Missing from XI → Dejan Lovren (image)
   {
     id: "q3-missing-xi-lovren",
-    order: 3,
+    order: 4,
     category: "Ενδεκάδα",
     points: 1,
     lang: "el",
@@ -52,22 +69,7 @@ export const questions = [
     answer: "Dejan Lovren",
   },
 
-  // 4) Second nationality → Bukayo Saka
-  {
-    id: "q4-saka-second-nationality",
-    order: 4,
-    category: "Εθνικότητες",
-    points: 2,
-    lang: "el",
-    prompt: "Ποια είναι η 2η εθνικότητα του Bukayo Saka;",
-    type: "open",
 
-    answerMode: "catalog",
-    catalog: "countries",
-    acceptKeys: ["NG"],
-    accept: ["Nigeria", "Νιγηρία"],
-    answer: "Νιγηρία",
-  },
 
   // 5) Iconic player → Zidane first pro club
   {
