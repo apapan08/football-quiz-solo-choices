@@ -48,8 +48,8 @@ export const questions = [
 
     answerMode: "catalog",
     catalog: "players",
-    accept: ["Emre Can"],
-    answer: "Emre Can",
+    accept: ["Nicolas Otamendi"],
+    answer: "Nicolas Otamendi",
   },
 
   // 3) Missing from XI → Dejan Lovren (image)
@@ -76,16 +76,16 @@ export const questions = [
     id: "q5-zidane-first-club",
     order: 5,
     category: "Iconic Players",
-    points: 2,
+    points: 1,
     lang: "el",
     prompt:
-      "Από ποια ομάδα ξεκίνησε την επαγγελματική του καριέρα ο Zinedine Zidane;",
+      "Ποιά ήταν η πρώτη ευρωπαική ομάδα που αγωνίστηκε ο βραζιλιάνος ποδοφαιριστής Kaká;",
     type: "open",
 
     answerMode: "catalog",
     catalog: "teams",
-    accept: ["AS Cannes", "Cannes"],
-    answer: "AS Cannes",
+    accept: ["AC Milan", "Milan"],
+    answer: "AC Milan",
   },
 
   // 6) Player stats (image) → Granit Xhaka
@@ -93,7 +93,7 @@ export const questions = [
     id: "q6-player-stats-xhaka",
     order: 6,
     category: "Στατιστικά παίκτη",
-    points: 2,
+    points: 1,
     lang: "el",
     prompt: "Ποιος είναι ο παίκτης με τα παρακάτω στατιστικά;",
     type: "open",
@@ -101,8 +101,8 @@ export const questions = [
 
     answerMode: "catalog",
     catalog: "players",
-    accept: ["Granit Xhaka"],
-    answer: "Granit Xhaka",
+    accept: ["Roberto Carlos"],
+    answer: "Roberto Carlos",
   },
 
   // 7) CL League Phase — northernmost stadium (Bodø/Glimt)
