@@ -2,9 +2,10 @@
 import { useEffect } from "react";
 
 /**
- * Prefetch next questions' media to warm the cache.
- * - Images: instantiate Image() (full fetch).
- * - Videos/Audio: off-DOM element with preload="metadata" (light).
+ * Prefetch next questions' media to warm the cache without hogging bandwidth.
+ * - Images: low-priority <link rel="preload" as="image" fetchpriority="low">
+ * - Videos: off-DOM <video preload="metadata"> (+ low-priority preload hint)
+ * - Audio: off-DOM <audio preload="metadata"> (+ low-priority preload hint)
  * Cleans up on index change.
  */
 export function useMediaPrefetch(questions, currentIndex, lookahead = 2) {
@@ -24,16 +25,12 @@ export function useMediaPrefetch(questions, currentIndex, lookahead = 2) {
 
       // ---- Images ----
       if (m.kind === "image") {
-        const img = new Image();
-        img.decoding = "async";
-        img.loading = "eager";
-        img.src = m.src;
-
-        // Hint (cheap)
+        // Low-priority preload hint only (avoid double fetch via new Image()).
         const link = document.createElement("link");
         link.rel = "preload";
         link.as = "image";
         link.href = m.src;
+        link.setAttribute("fetchpriority", "low");
         document.head.appendChild(link);
         cleaners.push(() => {
           try { document.head.removeChild(link); } catch {}
@@ -42,8 +39,9 @@ export function useMediaPrefetch(questions, currentIndex, lookahead = 2) {
 
       // ---- Videos ----
       else if (m.kind === "video") {
+        // Lightweight warm-up: only metadata.
         const v = document.createElement("video");
-        v.preload = "auto";
+        v.preload = "metadata";
         v.muted = true;
         v.playsInline = true;
         v.src = m.src;
@@ -55,7 +53,7 @@ export function useMediaPrefetch(questions, currentIndex, lookahead = 2) {
           try { v.load(); } catch {}
         });
 
-        // Low-priority preload hint
+        // Low-priority preload hint for the file
         const link = document.createElement("link");
         link.rel = "preload";
         link.as = "video";
@@ -72,6 +70,7 @@ export function useMediaPrefetch(questions, currentIndex, lookahead = 2) {
           poster.rel = "preload";
           poster.as = "image";
           poster.href = m.poster;
+          poster.setAttribute("fetchpriority", "low");
           document.head.appendChild(poster);
           cleaners.push(() => {
             try { document.head.removeChild(poster); } catch {}
@@ -79,7 +78,7 @@ export function useMediaPrefetch(questions, currentIndex, lookahead = 2) {
         }
       }
 
-      // ---- Audio (if used) ----
+      // ---- Audio ----
       else if (m.kind === "audio") {
         const a = document.createElement("audio");
         a.preload = "metadata";
@@ -95,6 +94,7 @@ export function useMediaPrefetch(questions, currentIndex, lookahead = 2) {
         link.rel = "preload";
         link.as = "audio";
         link.href = m.src;
+        link.setAttribute("fetchpriority", "low");
         document.head.appendChild(link);
         cleaners.push(() => {
           try { document.head.removeChild(link); } catch {}

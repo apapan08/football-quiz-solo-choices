@@ -15,11 +15,10 @@ export default Media;
 
 /* -------------------- Image -------------------- */
 function OptimizedImage({ media }) {
-  const { src, alt = "", priority = false, webp, avif } = media;
+  const { src, alt = "", priority = false, webp, avif, width, height, aspectRatio } = media;
   const [loaded, setLoaded] = useState(false);
 
   // Only include alternative sources if you actually provide them.
-  // (No 404s or extra requests if you don't.)
   const sources = useMemo(
     () => ({
       avif: typeof avif === "string" ? avif : null,
@@ -38,12 +37,15 @@ function OptimizedImage({ media }) {
         loading={priority ? "eager" : "lazy"}
         decoding="async"
         fetchpriority={priority ? "high" : "auto"}
+        width={width ?? undefined}
+        height={height ?? undefined}
         className={[
           "mx-auto rounded-xl object-contain",
           "w-full max-h-96",
           "transition-opacity duration-200",
           loaded ? "opacity-100" : "opacity-0",
         ].join(" ")}
+        style={{ aspectRatio: aspectRatio ?? (width && height ? `${width} / ${height}` : "16 / 9") }}
         onLoad={() => setLoaded(true)}
       />
     </picture>
@@ -53,7 +55,7 @@ function OptimizedImage({ media }) {
 /* -------------------- Video -------------------- */
 
 // Light hook: becomes true when the element is near the viewport
-function useInView(ref, rootMargin = "300px") {
+function useInView(ref, rootMargin = "600px") {
   const [inView, setInView] = useState(false);
   useEffect(() => {
     if (!ref.current || typeof IntersectionObserver === "undefined") return;
@@ -74,33 +76,38 @@ function useInView(ref, rootMargin = "300px") {
 function OptimizedVideo({ media }) {
   const { src, type = "video/mp4", poster } = media;
   const vRef = useRef(null);
-  const inView = useInView(vRef, "400px");   // broaden rootMargin for earlier loading
+  const inView = useInView(vRef, "600px"); // a bit earlier
   const [ready, setReady] = useState(false);
+  const [srcOn, setSrcOn] = useState(null);
+
+  // Attach source only when near viewport
+  useEffect(() => {
+    if (inView && !srcOn) setSrcOn(src);
+  }, [inView, srcOn, src]);
 
   useEffect(() => {
-    if (inView && vRef.current) {
-      vRef.current.preload = "auto";
+    if (srcOn && vRef.current) {
+      // Keep it lightweight; metadata first.
+      vRef.current.preload = "metadata";
+      try { vRef.current.load(); } catch {}
     }
-  }, [inView]);
+  }, [srcOn]);
 
   return (
     <video
       ref={vRef}
       controls
-      preload="auto"
+      preload="metadata"
       playsInline
       poster={poster}
-      className={`w-full rounded-md bg-black/5 ${
-        ready ? "opacity-100" : "opacity-0"
-      }`}
+      className={`w-full rounded-md bg-black/5 ${ready ? "opacity-100" : "opacity-0"}`}
       onCanPlay={() => setReady(true)}
     >
-      <source src={src} type={type} />
+      {srcOn ? <source src={srcOn} type={type} /> : null}
       Το πρόγραμμα περιήγησής σου δεν μπορεί να αναπαράγει αυτό το βίντεο.
     </video>
   );
 }
-
 
 /* -------------------- Audio -------------------- */
 function OptimizedAudio({ media }) {

@@ -201,7 +201,11 @@ export default function QuizPrototype() {
   const [index, setIndex] = usePersistentState(`${STORAGE_KEY}:index`, 0);
   const [stage, setStage] = usePersistentState(`${STORAGE_KEY}:stage`, STAGES.NAME);
 
-  useMediaPrefetch(QUESTIONS, index, 1);
+const conn = typeof navigator !== "undefined" ? navigator.connection : null;
+const dynamicLookahead =
+  (conn?.saveData || /2g|3g/.test(conn?.effectiveType || "")) ? 1 : 2;
+useMediaPrefetch(QUESTIONS, index, dynamicLookahead);
+
 
   const lastIndex = QUESTIONS.length - 1;
   const isFinalIndex = index === lastIndex;
@@ -835,7 +839,7 @@ function QuestionStage() {
 
       {/* Media */}
       <div className="mt-4">
-        <Media media={q.media} />
+        <Media media={{ ...q.media, priority: true }} />
       </div>
 
       {/* CATALOG */}
