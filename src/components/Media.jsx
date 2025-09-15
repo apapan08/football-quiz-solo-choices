@@ -15,7 +15,7 @@ export default Media;
 
 /* -------------------- Image -------------------- */
 function OptimizedImage({ media }) {
-  const { src, alt = "", priority = false, webp, avif, width, height, aspectRatio } = media;
+  const { src, alt = "", priority = false, webp, avif } = media;
   const [loaded, setLoaded] = useState(false);
 
   // Only include alternative sources if you actually provide them.
@@ -37,15 +37,12 @@ function OptimizedImage({ media }) {
         loading={priority ? "eager" : "lazy"}
         decoding="async"
         fetchpriority={priority ? "high" : "auto"}
-        width={width ?? undefined}
-        height={height ?? undefined}
         className={[
           "mx-auto rounded-xl object-contain",
-          "w-full max-h-96",
+          "w-full max-h-96", // same as before
           "transition-opacity duration-200",
           loaded ? "opacity-100" : "opacity-0",
         ].join(" ")}
-        style={{ aspectRatio: aspectRatio ?? (width && height ? `${width} / ${height}` : "16 / 9") }}
         onLoad={() => setLoaded(true)}
       />
     </picture>
@@ -87,7 +84,6 @@ function OptimizedVideo({ media }) {
 
   useEffect(() => {
     if (srcOn && vRef.current) {
-      // Keep it lightweight; metadata first.
       vRef.current.preload = "metadata";
       try { vRef.current.load(); } catch {}
     }
