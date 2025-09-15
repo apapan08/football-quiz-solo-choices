@@ -43,7 +43,7 @@ export function useMediaPrefetch(questions, currentIndex, lookahead = 2) {
       // ---- Videos ----
       else if (m.kind === "video") {
         const v = document.createElement("video");
-        v.preload = "metadata";
+        v.preload = "auto";
         v.muted = true;
         v.playsInline = true;
         v.src = m.src;

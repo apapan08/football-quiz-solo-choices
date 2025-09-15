@@ -74,7 +74,7 @@ function useInView(ref, rootMargin = "300px") {
 function OptimizedVideo({ media }) {
   const { src, type = "video/mp4", poster } = media;
   const vRef = useRef(null);
-  const inView = useInView(vRef, "1000px");   // broaden rootMargin for earlier loading
+  const inView = useInView(vRef, "400px");   // broaden rootMargin for earlier loading
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
