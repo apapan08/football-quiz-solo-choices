@@ -74,35 +74,25 @@ function useInView(ref, rootMargin = "300px") {
 function OptimizedVideo({ media }) {
   const { src, type = "video/mp4", poster } = media;
   const vRef = useRef(null);
-  const inView = useInView(vRef, "400px");
+  const inView = useInView(vRef, "1000px");   // broaden rootMargin for earlier loading
   const [ready, setReady] = useState(false);
 
-  // Warm the buffer right before it’s needed
   useEffect(() => {
-    const v = vRef.current;
-    if (!v) return;
-    try {
-      if (inView) {
-        v.preload = "auto"; // start fetching more than metadata when close
-        v.load();
-      } else {
-        v.preload = "metadata"; // stay light when far away
-      }
-    } catch {}
+    if (inView && vRef.current) {
+      vRef.current.preload = "auto";
+    }
   }, [inView]);
 
   return (
     <video
       ref={vRef}
       controls
+      preload="metadata"
       playsInline
       poster={poster}
-      preload="metadata"
-      className={[
-        "w-full max-h-[70vh] rounded-xl",
-        "transition-opacity duration-200",
-        ready ? "opacity-100" : "opacity-0",
-      ].join(" ")}
+      className={`w-full rounded-md bg-black/5 ${
+        ready ? "opacity-100" : "opacity-0"
+      }`}
       onCanPlay={() => setReady(true)}
     >
       <source src={src} type={type} />
@@ -110,6 +100,7 @@ function OptimizedVideo({ media }) {
     </video>
   );
 }
+
 
 /* -------------------- Audio -------------------- */
 function OptimizedAudio({ media }) {
