@@ -7,7 +7,6 @@ import ResultsTableResponsive from "./components/ResultsTableResponsive";
 import AutoCompleteAnswer from "./components/AutoCompleteAnswer";
 import ScoreInput from "./components/ScoreInput";
 import { validate as baseValidate } from "./lib/validators";
-// src/App.jsx
 import { useMediaPrefetch } from "./hooks/useMediaPrefetch";
 
 
@@ -201,6 +200,8 @@ export default function QuizPrototype() {
   // ——— Core game state ———
   const [index, setIndex] = usePersistentState(`${STORAGE_KEY}:index`, 0);
   const [stage, setStage] = usePersistentState(`${STORAGE_KEY}:stage`, STAGES.NAME);
+
+  useMediaPrefetch(QUESTIONS, index, 1);
 
   const lastIndex = QUESTIONS.length - 1;
   const isFinalIndex = index === lastIndex;

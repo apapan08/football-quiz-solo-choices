@@ -87,7 +87,7 @@ function OptimizedVideo({ media }) {
     <video
       ref={vRef}
       controls
-      preload="metadata"
+      preload="auto"
       playsInline
       poster={poster}
       className={`w-full rounded-md bg-black/5 ${
