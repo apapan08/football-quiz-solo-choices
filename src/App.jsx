@@ -780,39 +780,63 @@ function QuestionStage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [index]);
 
-  const submitAndReveal = async (value) => {
-    let stored;
-    if (mode === "scoreline") {
-      stored = value;
-    } else if (mode === "numeric") {
-      if (value === "" || value === null || value === undefined) {
-        stored = { value: null };
-      } else {
-        const n = Number(value);
-        stored = { value: Number.isFinite(n) ? n : null };
-      }
+// Replace the whole submitAndReveal with this version:
+const submitAndReveal = async (value) => {
+  let stored;
+  if (mode === "scoreline") {
+    stored = value;
+  } else if (mode === "numeric") {
+    if (value === "" || value === null || value === undefined) {
+      stored = { value: null };
     } else {
-      stored = value;
+      const n = Number(value);
+      stored = { value: Number.isFinite(n) ? n : null };
     }
+  } else {
+    stored = value;
+  }
 
-    setPlayerAnswers((prev) => ({
-      ...prev,
-      [index]: typeof stored === "object" && stored?.name ? stored.name : stored,
-    }));
+  // Persist what the player entered (even if blank)
+  setPlayerAnswers((prev) => ({
+    ...prev,
+    [index]: typeof stored === "object" && stored?.name ? stored.name : stored,
+  }));
 
+  // Detect explicit "I don't know" for auto-marking modes and mark as wrong immediately
+  const isAutoMode = mode !== "text";
+  const isIDontKnow =
+    (mode === "numeric" && (stored == null || stored.value == null)) ||
+    (mode === "scoreline" && (stored === "")) ||
+    (mode === "catalog" && (!stored || (typeof stored === "string" && stored.trim() === "")));
+
+  if (isAutoMode && isIDontKnow) {
+    if (!isFinalIndex) {
+      // instant wrong + reset streak
+      setAnswered((a) => ({ ...a, [index]: "wrong" }));
+      noAnswer();
+    } else {
+      // final question: apply loss immediately
+      finalizeOutcomeP1("wrong");
+    }
     setStage(STAGES.ANSWER);
+    return; // skip validation
+  }
 
-    if (mode !== "text") {
-      const result = await validateAny(q, stored?.name ? stored : stored);
-      if (!isFinalIndex) {
-        setAnswered((a) => ({ ...a, [index]: result.correct ? "correct" : "wrong" }));
-        if (result.correct) awardToP1(1);
-        else noAnswer();
-      } else {
-        finalizeOutcomeP1(result.correct ? "correct" : "wrong");
-      }
+  // Otherwise, keep existing behavior
+  setStage(STAGES.ANSWER);
+
+  if (isAutoMode) {
+    const result = await validateAny(q, stored?.name ? stored : stored);
+    if (!isFinalIndex) {
+      setAnswered((a) => ({ ...a, [index]: result.correct ? "correct" : "wrong" }));
+      if (result.correct) awardToP1(1);
+      else noAnswer();
+    } else {
+      finalizeOutcomeP1(result.correct ? "correct" : "wrong");
     }
-  };
+  }
+};
+
 
   return (
     <StageCard>
